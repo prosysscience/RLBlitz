@@ -10,7 +10,6 @@ default_config = {
     # we inference is done on CPU and the training can be done on GPU is activated
     'workers_use_cpu': True,
 
-    # TODO implement open ai
     # VecEnv option, don't touch if not needed
     # see the doc for more info: https://github.com/openai/gym/blob/master/gym/vector/async_vector_env.py#L25
     'env_copy': False,

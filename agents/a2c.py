@@ -16,7 +16,7 @@ class A2C:
         self.device = torch.device("cuda:0" if config['use_gpu'] else "cpu")
         self.memory = Memory()
         self.state_dim = self.envs.observation_space.shape[0]
-        self.action_dim = self.envs.action_space.n
+        self.action_dim = self.envs.action_space[0].n
         self.lr_scheduler = config['lr']
         self.model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'], config['hidden_size'])
         self.optimizer = config['optimizer'](self.model.parameters())
