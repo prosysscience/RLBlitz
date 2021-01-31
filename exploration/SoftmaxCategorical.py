@@ -1,15 +1,15 @@
-import torch.nn as nn
+import torch.nn.functional as F
 from torch.distributions import Categorical
 
 
 class SoftmaxCategorical:
 
-    def __init__(self, fn=nn.Softmax(dim=1), distribution=Categorical):
+    def __init__(self, fn=F.softmax, distribution=Categorical):
         self.fn = fn
         self.distribution = distribution
 
-    def sample(self, logits):
-        probabilities = self.fn(logits)
+    def dist(self, logits):
+        probabilities = self.fn(logits, dim=1)
         return self.distribution(probabilities)
 
     def __str__(self):
