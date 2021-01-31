@@ -8,6 +8,9 @@ class SoftmaxCategorical:
         self.fn = fn
         self.distribution = distribution
 
-    def sample(self, logit):
-        probabilities = self.fn(logit)
+    def sample(self, logits):
+        probabilities = self.fn(logits)
         return self.distribution(probabilities)
+
+    def __str__(self):
+        return 'Function applied to logit {}, and distribution {}'.format(self.fn, self.distribution)
