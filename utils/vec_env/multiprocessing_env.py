@@ -1,3 +1,5 @@
+# TODO See if we need to use Ray or better multiprocess (new one from openAI ?)
+
 # This code is from openai baseline
 # https://github.com/openai/baselines/tree/master/baselines/common/vec_env
 
@@ -8,26 +10,31 @@ from multiprocessing import Process, Pipe
 def worker(remote, parent_remote, env_fn_wrapper):
     parent_remote.close()
     env = env_fn_wrapper.x()
-    while True:
-        cmd, data = remote.recv()
-        if cmd == 'step':
-            ob, reward, done, info = env.step(data)
-            if done:
+    try:
+        while True:
+            cmd, data = remote.recv()
+            if cmd == 'step':
+                ob, reward, done, info = env.step(data)
+                if done:
+                    ob = env.reset()
+                remote.send((ob, reward, done, info))
+            elif cmd == 'reset':
                 ob = env.reset()
-            remote.send((ob, reward, done, info))
-        elif cmd == 'reset':
-            ob = env.reset()
-            remote.send(ob)
-        elif cmd == 'reset_task':
-            ob = env.reset_task()
-            remote.send(ob)
-        elif cmd == 'close':
-            remote.close()
-            break
-        elif cmd == 'get_spaces':
-            remote.send((env.observation_space, env.action_space))
-        else:
-            raise NotImplementedError
+                remote.send(ob)
+            elif cmd == 'reset_task':
+                ob = env.reset_task()
+                remote.send(ob)
+            elif cmd == 'close':
+                remote.close()
+                break
+            elif cmd == 'get_spaces':
+                remote.send((env.observation_space, env.action_space))
+            else:
+                raise NotImplementedError
+    except KeyboardInterrupt:
+        print('SubprocVecEnv worker: got KeyboardInterrupt')
+    finally:
+        env.close()
 
 
 class VecEnv(object):
