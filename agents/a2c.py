@@ -1,9 +1,11 @@
-import numpy as np
+import wandb
 import torch
+import cloudpickle
 
 from configs.a2c_default import default_a2c_config
 from models.ActorCritic import ActorCritic
 from utils.Memory import Memory
+from utils.InitLibrary import init_and_seed
 from utils.vec_env.util import create_subproc_env
 
 import torch.optim.lr_scheduler
@@ -12,6 +14,8 @@ import torch.optim.lr_scheduler
 class A2C:
 
     def __init__(self, config=default_a2c_config):
+        wandb.init(config=config)
+        init_and_seed(config)
         self.envs = create_subproc_env(config)
         self.num_worker = config['num_worker']
         self.num_steps = config['num_steps']
@@ -22,6 +26,7 @@ class A2C:
         self.action_dim = self.envs.action_space[0].n
         self.lr = config['lr_initial']
         self.model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'], config['hidden_size'])
+        wandb.watch(self.model)
         self.optimizer = config['optimizer'](self.model.parameters(), lr=self.lr)
         self.scheduler = config['lr_scheduler'](self.optimizer)
         self.states = self.envs.reset()
@@ -30,16 +35,18 @@ class A2C:
     def act(self):
         self.memory.clear()
         for _ in range(self.num_steps):
+            wandb.log({'step': self.step_nb})
             states_tensor = torch.from_numpy(self.states)
             distributions, values = self.model(states_tensor)
             actions = distributions.sample()
+            actions = actions.to('cpu', non_blocking=True)
 
             self.memory.actions.append(actions)
             self.memory.values.append(values)
             self.memory.logprobs.append(distributions.log_prob(actions))
             self.memory.entropy += distributions.entropy().mean()
 
-            next_states, rewards, dones, _ = self.envs.step(actions.cpu().numpy())
+            next_states, rewards, dones, _ = self.envs.step(actions.numpy())
 
             self.memory.rewards.append(torch.from_numpy(rewards).unsqueeze(1))
             self.memory.is_terminals.append(torch.from_numpy(dones).unsqueeze(1))
@@ -69,7 +76,7 @@ class A2C:
 
         loss = actor_loss + 0.5 * critic_loss - 0.001 * self.memory.entropy
 
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
         self.optimizer.step()
         self.scheduler.step()
