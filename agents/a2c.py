@@ -6,6 +6,8 @@ from models.ActorCritic import ActorCritic
 from utils.Memory import Memory
 from utils.vec_env.util import create_subproc_env
 
+import torch.optim.lr_scheduler
+
 
 class A2C:
 
@@ -18,9 +20,10 @@ class A2C:
         self.memory = Memory()
         self.state_dim = self.envs.observation_space.shape[0]
         self.action_dim = self.envs.action_space[0].n
-        self.lr_scheduler = config['lr']
+        self.lr = config['lr_initial']
         self.model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'], config['hidden_size'])
-        self.optimizer = config['optimizer'](self.model.parameters())
+        self.optimizer = config['optimizer'](self.model.parameters(), lr=self.lr)
+        self.scheduler = config['lr_scheduler'](self.optimizer)
         self.states = self.envs.reset()
         self.step_nb = 0
 
@@ -69,3 +72,4 @@ class A2C:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+        self.scheduler.step()

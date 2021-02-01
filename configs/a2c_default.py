@@ -1,8 +1,8 @@
+import torch
 from torch import optim, nn
 
 from configs import general_config
 from exploration.SoftmaxCategorical import SoftmaxCategorical
-from scheduler.Constant import Constant
 
 default_a2c_config = {
     'num_steps': 32,
@@ -10,7 +10,9 @@ default_a2c_config = {
     'hidden_size': [128, 128],
     'activation_fn': nn.ReLU(),
     'optimizer': optim.Adam,
-    'lr': Constant('1e-4'),
+    'lr_initial': 1e-4,
+    # default scheduler is constant, x represent the optimizer
+    'lr_scheduler': lambda x: torch.optim.lr_scheduler.StepLR(x, step_size=100, gamma=1.0),
     'exploration': SoftmaxCategorical,
 }
 
