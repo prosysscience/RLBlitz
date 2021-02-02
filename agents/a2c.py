@@ -1,11 +1,11 @@
 import wandb
 import torch
-import cloudpickle
 
 from configs.a2c_default import default_a2c_config
 from models.ActorCritic import ActorCritic
 from utils.Memory import Memory
 from utils.InitLibrary import init_and_seed
+from utils.Statistics import Statistics
 from utils.vec_env.util import create_subproc_env
 
 import torch.optim.lr_scheduler
@@ -14,37 +14,42 @@ import torch.optim.lr_scheduler
 class A2C:
 
     def __init__(self, config=default_a2c_config):
-        wandb.init(config=config)
+        wandb.init(config=config, monitor_gym=True)
         init_and_seed(config)
-        self.envs = create_subproc_env(config)
+        self.config = config
+        self.envs, self.env_info = create_subproc_env(config['env_id'], config['seed'], config['num_worker'],
+                                                      config['shared_memory'], config['env_copy'])
         self.num_worker = config['num_worker']
         self.num_steps = config['num_steps']
         self.gamma = config['gamma']
         self.device = torch.device("cuda:0" if config['use_gpu'] else "cpu")
         self.memory = Memory()
-        self.state_dim = self.envs.observation_space.shape[0]
-        self.action_dim = self.envs.action_space[0].n
+        self.statistics = Statistics(self.num_worker)
+        self.state_dim = self.env_info.observation_space.shape[0]
+        self.action_dim = self.env_info.action_space.n
         self.lr = config['lr_initial']
-        self.model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'], config['hidden_size'])
+        self.model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'],
+                                 config['hidden_size'], config['logistic_function'])
         wandb.watch(self.model)
-        self.optimizer = config['optimizer'](self.model.parameters(), lr=self.lr)
+        self.distribution = config['distribution']
+        self.optimizer = config['optimizer'](self.model.parameters(), lr=config['lr_initial'])
         self.scheduler = config['lr_scheduler'](self.optimizer)
         self.states = self.envs.reset()
-        self.step_nb = 0
 
     def act(self):
         self.memory.clear()
         for _ in range(self.num_steps):
-            wandb.log({'step': self.step_nb})
             states_tensor = torch.from_numpy(self.states)
-            distributions, values = self.model(states_tensor)
-            actions = distributions.sample()
+            probabilities, values = self.model(states_tensor)
+            dist = self.distribution(probabilities)
+            actions = dist.sample()
             actions = actions.to('cpu', non_blocking=True)
+            logprobs = dist.log_prob(actions)
 
             self.memory.actions.append(actions)
             self.memory.values.append(values)
-            self.memory.logprobs.append(distributions.log_prob(actions))
-            self.memory.entropy += distributions.entropy().mean()
+            self.memory.logprobs.append(logprobs)
+            self.memory.entropy += dist.entropy().mean()
 
             next_states, rewards, dones, _ = self.envs.step(actions.numpy())
 
@@ -53,30 +58,57 @@ class A2C:
 
             self.states = next_states
 
-            self.step_nb += self.num_worker
+            self.statistics.episode_return += rewards
+            # Statistics
+            for worker_id, done in enumerate(dones):
+                if done:
+                    wandb.log({'episode_number': self.statistics.episode_number,
+                               'episode_return': self.statistics.episode_return[worker_id]})
+                    self.statistics.episode_return[worker_id] = 0
+                    self.statistics.episode_number += 1
+
+            self.statistics.total_step += self.num_worker
 
     def update(self):
         # TODO improve, no list, directly use a tensor
         returns = []
-        not_terminal = ~torch.cat(self.memory.is_terminals)
         with torch.no_grad():
+            not_terminal = torch.logical_not(torch.cat(self.memory.is_terminals))
             states_tensor = torch.from_numpy(self.states)
-            discounted_rewards = self.model.critic(states_tensor)
-        for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
-            discounted_rewards = reward + (non_terminal * self.gamma * discounted_rewards)
-            returns.insert(0, discounted_rewards)
+            return_value = self.model.value_network(states_tensor)
+            for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
+                return_value = reward + (non_terminal * self.gamma * return_value)
+                returns.insert(0, return_value)
+            returns = torch.cat(returns).float()
 
-        returns = torch.cat(returns)
         log_probs = torch.cat(self.memory.logprobs)
         values = torch.cat(self.memory.values)
+
         advantage = returns - values
 
-        actor_loss = -(log_probs * advantage.detach()).mean()
         critic_loss = advantage.pow(2).mean()
 
-        loss = actor_loss + 0.5 * critic_loss - 0.001 * self.memory.entropy
+        if self.config['normalize_advantage']:
+            with torch.no_grad():
+                advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+
+        actor_loss = -(log_probs * advantage.detach()).mean()
+
+
+        loss = actor_loss + 0.5 * critic_loss - 1e-3 * self.memory.entropy
+
+        wandb.log({'total_loss': loss, 'actor_loss': actor_loss, 'critic_loss': critic_loss,
+                   'entropy': self.memory.entropy, 'lr': self.scheduler.get_last_lr()[-1]})
 
         self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['clip_grad_norm'])
         self.optimizer.step()
         self.scheduler.step()
+
+    def train(self):
+        self.act()
+        self.update()
+        self.statistics.iteration += 1
+        wandb.log({'iteration': self.statistics.iteration})
+

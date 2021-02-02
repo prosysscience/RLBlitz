@@ -1,7 +1,7 @@
-from gym.vector import AsyncVectorEnv
+from gym.vector import AsyncVectorEnv, SyncVectorEnv
 from gym.vector.tests.utils import make_env
 
 
-def create_subproc_env(config):
-    env_fn = [make_env(config['env_id'], config['seed']) for i in range(config['num_worker'])]
-    return AsyncVectorEnv(env_fn, shared_memory=config['shared_memory'], copy=config['env_copy'])
+def create_subproc_env(env_id='LunarLander-v2', seed=0, num_worker=1, shared_memory=False, copy=False):
+    env_fn = [make_env(env_id, seed) for i in range(num_worker)]
+    return AsyncVectorEnv(env_fn, copy=True), make_env(env_id, seed)()

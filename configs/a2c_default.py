@@ -1,19 +1,23 @@
 import torch
 from torch import optim, nn
+from torch.distributions import Categorical
 
 from configs import general_config
-from exploration.SoftmaxCategorical import SoftmaxCategorical
 
 default_a2c_config = {
-    'num_steps': 32,
+    'num_steps': 5,
     'gamma': 0.99,
-    'hidden_size': [128, 128],
+    'hidden_size': [32, 32],
     'activation_fn': nn.ReLU(),
-    'optimizer': optim.Adam,
-    'lr_initial': 1e-4,
+    'logistic_function': nn.Softmax(dim=1),
+    'distribution': Categorical,
+    'optimizer': optim.Adam,  # if you need more control, you can define a lambda
+    'lr_initial': 5e-4,
     # default scheduler is constant, x represent the optimizer
-    'lr_scheduler': lambda x: torch.optim.lr_scheduler.StepLR(x, step_size=100, gamma=1.0),
-    'exploration': SoftmaxCategorical,
+    'lr_scheduler': lambda x: torch.optim.lr_scheduler.LambdaLR(x, lr_lambda=lambda epoch: 1.0),
+    'clip_grad_norm': None,
+    # only valuable with large batches
+    'normalize_advantage': False,
 }
 
 # we import the default configs

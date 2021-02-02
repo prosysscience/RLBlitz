@@ -4,9 +4,9 @@ import psutil
 
 default_config = {
     # BASIC CONFIG
-    'env_id': 'LunarLander-v2',
+    'env_id': 'CartPole-v0',
     'seed': 0,
-    'num_worker': multiprocessing.cpu_count(),
+    'num_worker': multiprocessing.cpu_count() * 4,
     #TODO
     'use_gpu': torch.cuda.is_available(),
     # we inference is done on CPU and the training can be done on GPU is activated
