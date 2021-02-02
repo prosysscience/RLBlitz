@@ -1,3 +1,5 @@
+import time
+
 import wandb
 import torch
 
@@ -39,8 +41,11 @@ class A2C:
     def act(self):
         self.memory.clear()
         for step_nb in range(self.num_steps):
+            start_time = time.time()
             states_tensor = torch.from_numpy(self.states)
             probabilities, values = self.model(states_tensor)
+            wandb.log({'inference_time': time.time() - start_time},
+                      step=self.statistics.iteration)
             dist = self.distribution(probabilities)
             actions = dist.sample()
             actions = actions.to('cpu', non_blocking=True)
@@ -61,17 +66,22 @@ class A2C:
             self.states = next_states
 
             self.statistics.episode_return += rewards
+            self.statistics.episode_len += 1
             # Statistics
             for worker_id, done in enumerate(dones):
                 if done:
                     wandb.log({'episode_number': self.statistics.episode_number,
-                               'episode_return': self.statistics.episode_return[worker_id]})
+                               'episode_return': self.statistics.episode_return[worker_id],
+                               'episode_len': self.statistics.episode_len[worker_id]}, step=self.statistics.iteration)
                     self.statistics.episode_return[worker_id] = 0
                     self.statistics.episode_number += 1
+                    self.statistics.episode_len[worker_id] = 0
+                    self.statistics.episode_this_iter += 1
 
             self.statistics.total_step += self.num_worker
 
     def update(self):
+        start_time = time.time()
         with torch.no_grad():
             returns = torch.empty((len(self.memory), self.config['num_worker']), dtype=torch.float)
             not_terminal = torch.logical_not(self.memory.is_terminals)
@@ -100,7 +110,7 @@ class A2C:
         loss = actor_loss + self.config['vf_coeff'] * critic_loss - self.config['entropy_coeff'] * self.memory.entropy
 
         wandb.log({'total_loss': loss, 'actor_loss': actor_loss, 'critic_loss': critic_loss,
-                   'entropy': self.memory.entropy, 'lr': self.scheduler.get_last_lr()[-1]})
+                   'entropy': self.memory.entropy, 'lr': self.scheduler.get_last_lr()[-1]}, step=self.statistics.iteration)
 
         self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -108,10 +118,17 @@ class A2C:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['clip_grad_norm'])
         self.optimizer.step()
         self.scheduler.step()
+        wandb.log({'training_time': time.time() - start_time},
+                  step=self.statistics.iteration)
 
     def train(self):
+        start_time = time.time()
+        self.statistics.episode_this_iter = 0
         self.act()
         self.update()
         self.statistics.iteration += 1
-        wandb.log({'iteration': self.statistics.iteration})
+        wandb.log({'iteration': self.statistics.iteration,
+                   'episode_this_iter': self.statistics.episode_this_iter,
+                   'total_steps': self.statistics.total_step,
+                   'time_this_iter': time.time() - start_time}, step=self.statistics.iteration)
 

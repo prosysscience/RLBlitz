@@ -4,7 +4,7 @@ import psutil
 
 default_config = {
     # BASIC CONFIG
-    'env_id': 'CartPole-v0',
+    'env_id': 'LunarLander-v2',
     'seed': 0,
     'num_worker': multiprocessing.cpu_count() * 4,
     #TODO

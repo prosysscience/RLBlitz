@@ -7,12 +7,12 @@ from configs import general_config
 default_a2c_config = {
     'num_steps': 5,
     'gamma': 0.99,
-    'hidden_size': [32, 32],
+    'hidden_size': [64, 64],
     'activation_fn': nn.ReLU(),
     'logistic_function': nn.Softmax(dim=1),
     'distribution': Categorical,
     'optimizer': optim.Adam,  # if you need more control, you can define a lambda
-    'lr_initial': 5e-4,
+    'lr_initial': 1e-4,
     # default scheduler is constant, x represent the optimizer
     'lr_scheduler': lambda x: torch.optim.lr_scheduler.LambdaLR(x, lr_lambda=lambda epoch: 1.0),
     'clip_grad_norm': None,
