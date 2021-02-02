@@ -23,10 +23,10 @@ class A2C:
         self.num_steps = config['num_steps']
         self.gamma = config['gamma']
         self.device = torch.device("cuda:0" if config['use_gpu'] else "cpu")
-        self.memory = Memory()
         self.statistics = Statistics(self.num_worker)
         self.state_dim = self.env_info.observation_space.shape[0]
         self.action_dim = self.env_info.action_space.n
+        self.memory = Memory(config, self.state_dim)
         self.lr = config['lr_initial']
         self.model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'],
                                  config['hidden_size'], config['logistic_function'])
@@ -38,7 +38,7 @@ class A2C:
 
     def act(self):
         self.memory.clear()
-        for _ in range(self.num_steps):
+        for step_nb in range(self.num_steps):
             states_tensor = torch.from_numpy(self.states)
             probabilities, values = self.model(states_tensor)
             dist = self.distribution(probabilities)
@@ -46,17 +46,17 @@ class A2C:
             actions = actions.to('cpu', non_blocking=True)
             logprobs = dist.log_prob(actions)
 
-            self.memory.actions.append(actions)
-            self.memory.values.append(values)
-            self.memory.logprobs.append(logprobs)
+            self.memory.actions[step_nb] = actions
+            self.memory.values[step_nb] = values
+            self.memory.logprobs[step_nb] = logprobs
             self.memory.entropy += dist.entropy().mean()
 
             next_states, rewards, dones, _ = self.envs.step(actions.numpy())
 
             rewards_tensor = torch.from_numpy(rewards)
             dones_tensor = torch.from_numpy(dones)
-            self.memory.rewards.append(rewards_tensor.view(1, rewards_tensor.shape[0], -1))
-            self.memory.is_terminals.append(dones_tensor.view(1, dones.shape[0], -1))
+            self.memory.rewards[step_nb] = rewards_tensor
+            self.memory.is_terminals[step_nb] = dones_tensor
 
             self.states = next_states
 
@@ -73,19 +73,19 @@ class A2C:
 
     def update(self):
         with torch.no_grad():
-            returns = torch.empty((len(self.memory), self.config['num_worker'], 1), dtype=torch.float)
-            not_terminal = torch.logical_not(torch.cat(self.memory.is_terminals))
+            returns = torch.empty((len(self.memory), self.config['num_worker']), dtype=torch.float)
+            not_terminal = torch.logical_not(self.memory.is_terminals)
             states_tensor = torch.from_numpy(self.states)
-            return_value = self.model.value_network(states_tensor)
+            return_value = self.model.value_network(states_tensor).view(-1)
             index = len(self.memory) - 1
             for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
                 return_value = reward + (non_terminal * self.gamma * return_value)
                 returns[index] = return_value
                 index -= 1
-            returns = returns.view(-1)
 
-        log_probs = torch.cat(self.memory.logprobs)
-        values = torch.cat(self.memory.values)
+        # view is better than squeeze because it
+        values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
+
         advantage = returns - values
 
         critic_loss = advantage.pow(2).mean()
@@ -94,7 +94,7 @@ class A2C:
             with torch.no_grad():
                 advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
 
-        actor_loss = -(log_probs * advantage.detach()).mean()
+        actor_loss = -(self.memory.logprobs * advantage.detach()).mean()
 
 
         loss = actor_loss + self.config['vf_coeff'] * critic_loss - self.config['entropy_coeff'] * self.memory.entropy
