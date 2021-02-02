@@ -53,8 +53,10 @@ class A2C:
 
             next_states, rewards, dones, _ = self.envs.step(actions.numpy())
 
-            self.memory.rewards.append(torch.from_numpy(rewards).unsqueeze(1))
-            self.memory.is_terminals.append(torch.from_numpy(dones).unsqueeze(1))
+            rewards_tensor = torch.from_numpy(rewards)
+            dones_tensor = torch.from_numpy(dones)
+            self.memory.rewards.append(rewards_tensor.view(1, rewards_tensor.shape[0], -1))
+            self.memory.is_terminals.append(dones_tensor.view(1, dones.shape[0], -1))
 
             self.states = next_states
 
