@@ -8,10 +8,7 @@ class ActorCritic(nn.Module):
                  logistic_function=nn.Softmax(dim=1)):
         super(ActorCritic, self).__init__()
         # actor
-        self.actor_network = nn.Sequential(
-            MLP(state_dim, action_dim, activation, hidden_layers),
-            logistic_function,
-        )
+        self.actor_network = MLP(state_dim, action_dim, activation, hidden_layers, logistic_function)
         # critic
         self.value_network = MLP(state_dim, 1, activation, hidden_layers)
 
