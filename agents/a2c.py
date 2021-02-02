@@ -70,20 +70,20 @@ class A2C:
             self.statistics.total_step += self.num_worker
 
     def update(self):
-        # TODO improve, no list, directly use a tensor
-        returns = []
         with torch.no_grad():
+            returns = torch.empty((len(self.memory), self.config['num_worker'], 1), dtype=torch.float)
             not_terminal = torch.logical_not(torch.cat(self.memory.is_terminals))
             states_tensor = torch.from_numpy(self.states)
             return_value = self.model.value_network(states_tensor)
+            index = len(self.memory) - 1
             for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
                 return_value = reward + (non_terminal * self.gamma * return_value)
-                returns.insert(0, return_value)
-            returns = torch.cat(returns).float()
+                returns[index] = return_value
+                index -= 1
+            returns = returns.view(-1)
 
         log_probs = torch.cat(self.memory.logprobs)
         values = torch.cat(self.memory.values)
-
         advantage = returns - values
 
         critic_loss = advantage.pow(2).mean()
@@ -95,14 +95,15 @@ class A2C:
         actor_loss = -(log_probs * advantage.detach()).mean()
 
 
-        loss = actor_loss + 0.5 * critic_loss - 1e-3 * self.memory.entropy
+        loss = actor_loss + self.config['vf_coeff'] * critic_loss - self.config['entropy_coeff'] * self.memory.entropy
 
         wandb.log({'total_loss': loss, 'actor_loss': actor_loss, 'critic_loss': critic_loss,
                    'entropy': self.memory.entropy, 'lr': self.scheduler.get_last_lr()[-1]})
 
         self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['clip_grad_norm'])
+        if self.config['clip_grad_norm'] is not None:
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['clip_grad_norm'])
         self.optimizer.step()
         self.scheduler.step()
 
