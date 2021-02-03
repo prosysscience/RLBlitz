@@ -132,3 +132,7 @@ class A2C:
                    'total_steps': self.statistics.total_step,
                    'time_this_iter': time.time() - start_time}, step=self.statistics.iteration)
 
+    def save_model(self, path='a2c_default'):
+        torch.save(self.model.state_dict(), path + ".h5")
+        wandb.save(path + '.h5')
+
