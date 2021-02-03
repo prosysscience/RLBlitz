@@ -1,5 +1,5 @@
 import time
-
+import dill
 import wandb
 import torch
 
@@ -135,4 +135,13 @@ class A2C:
     def save_model(self, path='a2c_default'):
         torch.save(self.model.state_dict(), path + ".h5")
         wandb.save(path + '.h5')
+
+    def load_model(self, path='a2c_default'):
+        wandb.unwatch(self.model)
+        self.model = torch.load(path)
+        wandb.watch(self.model)
+
+    def save_agent_checkpoint(self, path='a2c_default_checkpoint'):
+        pass
+
 
