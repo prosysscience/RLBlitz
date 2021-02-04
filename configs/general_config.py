@@ -14,7 +14,7 @@ default_config = {
     #TODO
     'use_gpu': torch.cuda.is_available(),
     # we inference is done on CPU and the training can be done on GPU is activated
-    'workers_use_cpu': True,
+    'workers_use_gpu': False,
     # for more control about how to handle the stats, modify this
     'statistics': Statistics,
 

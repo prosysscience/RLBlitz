@@ -1,0 +1,54 @@
+atari-py==0.2.6
+bleach==3.2.3
+box2d-py==2.3.8
+certifi==2020.12.5
+chardet==4.0.0
+click==7.1.2
+cloudpickle==1.6.0
+colorama==0.4.4
+configparser==5.0.1
+dill @ file:///tmp/build/80754af9/dill_1605066453875/work
+docker-pycreds==0.4.0
+docutils==0.16
+future==0.18.2
+gitdb==4.0.5
+GitPython==3.1.12
+-e git+https://github.com/openai/gym.git@8a721ace460cbaf8c3e6c03c12d06c616fd6e1e8#egg=gym
+idna==2.10
+keyring==22.0.1
+mkl-fft==1.2.0
+mkl-random==1.1.1
+mkl-service==2.3.0
+numpy @ file:///opt/concourse/worker/volumes/live/5572694e-967a-4c0c-52cf-b53d43e72de9/volume/numpy_and_numpy_base_1603491881791/work
+olefile==0.46
+opencv-python==4.5.1.48
+pathtools==0.1.2
+Pillow==7.2.0
+pkginfo==1.7.0
+promise==2.3
+protobuf==3.14.0
+psutil @ file:///opt/concourse/worker/volumes/live/ff72f822-991c-4030-4f3a-8c41d3ac4e4f/volume/psutil_1598370232375/work
+pyglet==1.5.0
+Pygments==2.7.4
+python-dateutil==2.8.1
+PyYAML==5.4.1
+readme-renderer==28.0
+requests==2.25.1
+requests-toolbelt==0.9.1
+rfc3986==1.4.0
+scipy==1.6.0
+sentry-sdk==0.19.5
+shortuuid==1.0.1
+six @ file:///opt/concourse/worker/volumes/live/5b31cb27-1e37-4ca5-6e9f-86246eb206d2/volume/six_1605205320872/work
+smmap==3.0.5
+subprocess32==3.5.4
+torch==1.7.1
+torchaudio==0.7.0a0+a853dff
+torchvision==0.8.2
+tqdm==4.56.0
+twine==3.3.0
+typing-extensions @ file:///tmp/build/80754af9/typing_extensions_1611751222202/work
+urllib3==1.26.3
+wandb==0.10.17
+watchdog==0.10.4
+webencodings==0.5.1

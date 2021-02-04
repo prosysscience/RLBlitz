@@ -35,14 +35,18 @@ class A2C:
         self.optimizer = config['optimizer'](self.model.parameters(), lr=config['lr_initial'])
         self.scheduler = config['lr_scheduler'](self.optimizer)
         self.states = self.envs.reset()
+        self.training_device = torch.device('cuda' if self.config['use_gpu'] and torch.cuda.is_available() else 'cpu')
+        self.inference_device = torch.device('cuda' if self.config['workers_use_gpu'] and torch.cuda.is_available()
+                                             else 'cpu')
+        self.states_tensor = torch.from_numpy(self.states).to(self.inference_device, non_blocking=True)
 
     def act(self):
         self.statistics.start_act()
         self.memory.clear()
         for step_nb in range(self.num_steps):
             self.statistics.start_step()
-            states_tensor = torch.from_numpy(self.states)
-            probabilities, values = self.model(states_tensor)
+            self.model = self.model.to(self.inference_device, non_blocking=True)
+            probabilities, values = self.model(self.states_tensor)
             wandb.log({'inference_time': time.time() - self.statistics.time_start_step},
                       step=self.statistics.iteration)
             dist = self.distribution(probabilities)
@@ -50,19 +54,20 @@ class A2C:
             actions = actions.to('cpu', non_blocking=True)
             logprobs = dist.log_prob(actions)
 
-            self.memory.actions[step_nb] = actions
-            self.memory.values[step_nb] = values
-            self.memory.logprobs[step_nb] = logprobs
+            self.memory.actions[step_nb] = actions.to(self.training_device, non_blocking=True)
+            self.memory.values[step_nb] = values.to(self.training_device, non_blocking=True)
+            self.memory.logprobs[step_nb] = logprobs.to(self.training_device, non_blocking=True)
             self.memory.entropy += dist.entropy().mean()
 
             next_states, rewards, dones, _ = self.envs.step(actions.numpy())
 
-            rewards_tensor = torch.from_numpy(rewards)
-            dones_tensor = torch.from_numpy(dones)
+            rewards_tensor = torch.from_numpy(rewards).to(self.training_device, non_blocking=True)
+            dones_tensor = torch.from_numpy(dones).to(self.training_device, non_blocking=True)
             self.memory.rewards[step_nb] = rewards_tensor
             self.memory.is_terminals[step_nb] = dones_tensor
 
             self.states = next_states
+            self.states_tensor = torch.from_numpy(self.states).to(self.inference_device, non_blocking=True)
 
             self.statistics.add_rewards(rewards)
             # Statistics
@@ -78,11 +83,12 @@ class A2C:
 
     def update(self):
         self.statistics.start_update()
+        self.model = self.model.to(self.training_device, non_blocking=True)
         with torch.no_grad():
-            returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float)
+            returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float, device=self.training_device)
             not_terminal = torch.logical_not(self.memory.is_terminals)
-            states_tensor = torch.from_numpy(self.states)
-            return_value = self.model.value_network(states_tensor).view(-1)
+            training_states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
+            return_value = self.model.value_network(training_states_tensor).view(-1)
             index = len(self.memory) - 1
             for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
                 return_value = reward + (non_terminal * self.gamma * return_value)
@@ -136,7 +142,7 @@ class A2C:
         if number_worker is None:
             number_worker = self.num_worker
         rendering_env, _ = create_subproc_env(self.config['env_id'], self.config['seed'], number_worker,
-                                                      self.config['shared_memory'], self.config['env_copy'], True)
+                                              self.config['shared_memory'], self.config['env_copy'], True)
         rendering_states = rendering_env.reset()
         with torch.no_grad():
             episode_done_worker = torch.zeros(number_worker, dtype=torch.bool)
@@ -163,5 +169,3 @@ class A2C:
 
     def save_agent_checkpoint(self, path='a2c_default_checkpoint'):
         pass
-
-

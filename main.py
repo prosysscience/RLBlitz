@@ -5,4 +5,4 @@ if __name__ == '__main__':
     for _ in range(100):
         a2c.train()
     a2c.save_model()
-    a2c.render()
+    #a2c.render()
