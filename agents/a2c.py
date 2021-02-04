@@ -89,15 +89,10 @@ class A2C:
 
     def update(self):
         self.statistics.start_update()
+        self.optimizer.zero_grad(set_to_none=True)
         if self.inference_device != self.training_device:
-            self.optimizer.zero_grad(set_to_none=True)
-            buffer = io.BytesIO()
-            torch.save(self.model, buffer, pickle_module=dill)
-            ckpt = torch.load(buffer, map_location=self.training_device)
-            self.model.load_state_dict(ckpt['state_dict'])
-            self.optimizer.load_state_dict(ckpt['optimizer'])
-            self.scheduler.load_state_dict(ckpt['scheduler'])
-            buffer.close()
+            optimizer_to(self.optimizer, self.training_device)
+            optimizer_to(self.scheduler, self.training_device)
         with torch.no_grad():
             returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float, device=self.training_device)
             not_terminal = torch.logical_not(self.memory.is_terminals)
@@ -129,7 +124,6 @@ class A2C:
                    'entropy': self.memory.entropy, 'lr': self.scheduler.get_last_lr()[-1]},
                   step=self.statistics.iteration)
 
-        self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
         if self.config['clip_grad_norm'] is not None:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['clip_grad_norm'])
