@@ -1,3 +1,4 @@
+import io
 import time
 import wandb
 import torch
@@ -19,6 +20,9 @@ class A2C:
         self.config = config
         self.envs, self.env_info = create_subproc_env(config['env_id'], config['seed'], config['num_worker'],
                                                       config['shared_memory'], config['env_copy'], False)
+        self.training_device = torch.device('cuda' if self.config['use_gpu'] and torch.cuda.is_available() else 'cpu')
+        self.inference_device = torch.device('cuda' if self.config['workers_use_gpu'] and torch.cuda.is_available()
+                                             else 'cpu')
         self.num_worker = config['num_worker']
         self.num_steps = config['num_steps']
         self.gamma = config['gamma']
@@ -27,16 +31,15 @@ class A2C:
         self.state_dim = self.env_info.observation_space.shape[0]
         self.action_dim = self.env_info.action_space.n
         self.lr = config['lr_initial']
+
+        self.distribution = config['distribution']
         self.model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'],
                                  config['hidden_size'], config['logistic_function'])
+        self.model.to(self.inference_device, non_blocking=True)
         wandb.watch(self.model)
-        self.distribution = config['distribution']
         self.optimizer = config['optimizer'](self.model.parameters(), lr=config['lr_initial'])
         self.scheduler = config['lr_scheduler'](self.optimizer)
         self.states = self.envs.reset()
-        self.training_device = torch.device('cuda' if self.config['use_gpu'] and torch.cuda.is_available() else 'cpu')
-        self.inference_device = torch.device('cuda' if self.config['workers_use_gpu'] and torch.cuda.is_available()
-                                             else 'cpu')
         self.states_tensor = torch.from_numpy(self.states).to(self.inference_device, non_blocking=True)
         self.memory = Memory(config, self.state_dim, self.training_device)
 
@@ -83,9 +86,14 @@ class A2C:
 
     def update(self):
         self.statistics.start_update()
-        self.model = self.model.to(self.training_device, non_blocking=False)
-        self.optimizer.load_state_dict(self.model.state_dict)
-        self.scheduler.load_state_dict(self.model.state_dict)
+        if self.inference_device != self.training_device:
+            buffer = io.BytesIO()
+            torch.save(self.model, buffer)
+            ckpt = torch.load(buffer, map_location=self.training_device)
+            self.model.load_state_dict(ckpt['state_dict'])
+            self.optimizer.load_state_dict(ckpt['optimizer'])
+            self.scheduler.load_state_dict(ckpt['scheduler'])
+            buffer.close()
         with torch.no_grad():
             returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float, device=self.training_device)
             not_terminal = torch.logical_not(self.memory.is_terminals)
