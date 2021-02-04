@@ -39,12 +39,13 @@ class A2C:
         self.states = self.envs.reset()
 
     def act(self):
+        self.statistics.start_act()
         self.memory.clear()
         for step_nb in range(self.num_steps):
-            start_time = time.time()
+            self.statistics.start_step()
             states_tensor = torch.from_numpy(self.states)
             probabilities, values = self.model(states_tensor)
-            wandb.log({'inference_time': time.time() - start_time},
+            wandb.log({'inference_time': time.time() - self.statistics.time_start_step},
                       step=self.statistics.iteration)
             dist = self.distribution(probabilities)
             actions = dist.sample()
@@ -65,23 +66,20 @@ class A2C:
 
             self.states = next_states
 
-            self.statistics.episode_return += rewards
-            self.statistics.episode_len += 1
+            self.statistics.add_rewards(rewards)
             # Statistics
             for worker_id, done in enumerate(dones):
                 if done:
                     wandb.log({'episode_number': self.statistics.episode_number,
                                'episode_return': self.statistics.episode_return[worker_id],
                                'episode_len': self.statistics.episode_len[worker_id]}, step=self.statistics.iteration)
-                    self.statistics.episode_return[worker_id] = 0
-                    self.statistics.episode_number += 1
-                    self.statistics.episode_len[worker_id] = 0
-                    self.statistics.episode_this_iter += 1
+                    self.statistics.episode_done(worker_id)
 
-            self.statistics.total_step += self.num_worker
+            self.statistics.end_step()
+        self.statistics.end_act()
 
     def update(self):
-        start_time = time.time()
+        self.statistics.start_update()
         with torch.no_grad():
             returns = torch.empty((len(self.memory), self.config['num_worker']), dtype=torch.float)
             not_terminal = torch.logical_not(self.memory.is_terminals)
@@ -106,11 +104,13 @@ class A2C:
 
         actor_loss = -(self.memory.logprobs * advantage.detach()).mean()
 
-
-        loss = actor_loss + self.config['vf_coeff'] * critic_loss - self.config['entropy_coeff'] * self.memory.entropy
+        loss = actor_loss + \
+               self.config['vf_coeff'] * critic_loss - \
+               self.config['entropy_coeff'] * self.memory.entropy
 
         wandb.log({'total_loss': loss, 'actor_loss': actor_loss, 'critic_loss': critic_loss,
-                   'entropy': self.memory.entropy, 'lr': self.scheduler.get_last_lr()[-1]}, step=self.statistics.iteration)
+                   'entropy': self.memory.entropy, 'lr': self.scheduler.get_last_lr()[-1]},
+                  step=self.statistics.iteration)
 
         self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -118,19 +118,21 @@ class A2C:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['clip_grad_norm'])
         self.optimizer.step()
         self.scheduler.step()
-        wandb.log({'training_time': time.time() - start_time},
+        self.statistics.end_update()
+        wandb.log({'training_time': time.time() - self.statistics.time_start_update},
                   step=self.statistics.iteration)
 
     def train(self):
-        start_time = time.time()
+        self.statistics.start_train()
         self.statistics.episode_this_iter = 0
         self.act()
         self.update()
-        self.statistics.iteration += 1
+        self.statistics.end_train()
         wandb.log({'iteration': self.statistics.iteration,
                    'episode_this_iter': self.statistics.episode_this_iter,
                    'total_steps': self.statistics.total_step,
-                   'time_this_iter': time.time() - start_time}, step=self.statistics.iteration)
+                   'time_this_iter': time.time() - self.statistics.time_start_train},
+                  step=self.statistics.iteration)
 
     def save_model(self, path='a2c_default'):
         torch.save(self.model.state_dict(), path + ".h5")
@@ -143,5 +145,3 @@ class A2C:
 
     def save_agent_checkpoint(self, path='a2c_default_checkpoint'):
         pass
-
-
