@@ -5,7 +5,7 @@ import torch
 from configs.a2c_default import default_a2c_config
 from models.ActorCritic import ActorCritic
 from utils.Memory import Memory
-from utils.InitLibrary import init_and_seed
+from utils.Diverse import init_and_seed, optimizer_to
 from utils.vec_env.util import create_subproc_env
 
 import torch.optim.lr_scheduler
@@ -31,9 +31,8 @@ class A2C:
                                  config['hidden_size'], config['logistic_function'])
         wandb.watch(self.model)
         self.distribution = config['distribution']
-        # initialized after! Because model can move from gpu to cpu
-        self.optimizer = None
-        self.scheduler = None
+        self.optimizer = config['optimizer'](self.model.parameters(), lr=config['lr_initial'])
+        self.scheduler = config['lr_scheduler'](self.optimizer)
         self.states = self.envs.reset()
         self.training_device = torch.device('cuda' if self.config['use_gpu'] and torch.cuda.is_available() else 'cpu')
         self.inference_device = torch.device('cuda' if self.config['workers_use_gpu'] and torch.cuda.is_available()
@@ -84,13 +83,8 @@ class A2C:
 
     def update(self):
         self.statistics.start_update()
-        if self.optimizer is None:
-            self.model = self.model.to(self.training_device, non_blocking=False)
-            self.optimizer = self.config['optimizer'](self.model.parameters(), lr=self.config['lr_initial'])
-            self.scheduler = self.config['lr_scheduler'](self.optimizer)
-        else:
-            self.model = self.model.to(self.training_device, non_blocking=True)
-
+        self.model = self.model.to(self.training_device, non_blocking=True)
+        optimizer_to(self.optimizer, self.training_device)
         with torch.no_grad():
             returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float, device=self.training_device)
             not_terminal = torch.logical_not(self.memory.is_terminals)
@@ -101,7 +95,6 @@ class A2C:
                 return_value = reward + (non_terminal * self.gamma * return_value)
                 returns[index] = return_value
                 index -= 1
-
         # view is better than squeeze because it
         values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
 
