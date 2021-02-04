@@ -25,7 +25,7 @@ class A2C:
         self.num_steps = config['num_steps']
         self.gamma = config['gamma']
         self.device = torch.device("cuda:0" if config['use_gpu'] else "cpu")
-        self.statistics = Statistics(self.num_worker)
+        self.statistics = config['statistics'](self.num_worker)
         self.state_dim = self.env_info.observation_space.shape[0]
         self.action_dim = self.env_info.action_space.n
         self.memory = Memory(config, self.state_dim)
@@ -81,7 +81,7 @@ class A2C:
     def update(self):
         self.statistics.start_update()
         with torch.no_grad():
-            returns = torch.empty((len(self.memory), self.config['num_worker']), dtype=torch.float)
+            returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float)
             not_terminal = torch.logical_not(self.memory.is_terminals)
             states_tensor = torch.from_numpy(self.states)
             return_value = self.model.value_network(states_tensor).view(-1)

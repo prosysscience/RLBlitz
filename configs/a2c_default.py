@@ -5,8 +5,6 @@ from torch.distributions import Categorical
 from configs import general_config
 
 default_a2c_config = {
-    'num_steps': 5,
-    'gamma': 0.99,
     'hidden_size': [64, 64],
     'activation_fn': nn.ReLU(),
     'logistic_function': nn.Softmax(dim=1),
