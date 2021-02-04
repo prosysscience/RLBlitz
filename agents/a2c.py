@@ -87,6 +87,7 @@ class A2C:
     def update(self):
         self.statistics.start_update()
         if self.inference_device != self.training_device:
+            self.model.to(device=self.training_device, non_blocking=True)
             self.optimizer.zero_grad(set_to_none=True)
             buffer = io.BytesIO()
             torch.save(self.model, buffer)
