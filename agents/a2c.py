@@ -2,6 +2,7 @@ import io
 import time
 
 import cloudpickle
+import dill
 import wandb
 import torch
 
@@ -91,7 +92,7 @@ class A2C:
         if self.inference_device != self.training_device:
             self.optimizer.zero_grad(set_to_none=True)
             buffer = io.BytesIO()
-            torch.save(self.model, buffer, pickle_module=cloudpickle)
+            torch.save(self.model, buffer, pickle_module=dill)
             ckpt = torch.load(buffer, map_location=self.training_device)
             self.model.load_state_dict(ckpt['state_dict'])
             self.optimizer.load_state_dict(ckpt['optimizer'])
