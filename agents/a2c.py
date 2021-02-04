@@ -132,14 +132,16 @@ class A2C:
                    'time_this_iter': time.time() - self.statistics.time_start_train},
                   step=self.statistics.iteration)
 
-    def render(self, number_worker=4):
+    def render(self, number_worker=None):
+        if number_worker is None:
+            number_worker = self.num_worker
         rendering_env, _ = create_subproc_env(self.config['env_id'], self.config['seed'], number_worker,
                                                       self.config['shared_memory'], self.config['env_copy'], True)
         rendering_states = rendering_env.reset()
         with torch.no_grad():
             episode_done_worker = torch.zeros(number_worker, dtype=torch.bool)
             while torch.sum(episode_done_worker) < number_worker:
-                rendering_env.render()
+                rendering_env.render(mode='rgb_array')
                 states_tensor = torch.from_numpy(rendering_states)
                 probabilities = self.model.actor_network(states_tensor)
                 dist = self.distribution(probabilities)
@@ -147,7 +149,7 @@ class A2C:
                 actions = actions.to('cpu', non_blocking=True)
                 rendering_states, rewards, dones, _ = rendering_env.step(actions.numpy())
                 episode_done_worker += dones
-            rendering_env.render()
+            rendering_env.render(mode='rgb_array')
         rendering_env.close()
 
     def save_model(self, path='a2c_default'):
