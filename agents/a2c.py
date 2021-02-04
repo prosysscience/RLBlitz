@@ -51,8 +51,8 @@ class A2C:
                       step=self.statistics.iteration)
             dist = self.distribution(probabilities)
             actions = dist.sample()
-            actions = actions.to('cpu', non_blocking=True)
             logprobs = dist.log_prob(actions)
+            actions = actions.to('cpu', non_blocking=True)
 
             self.memory.actions[step_nb] = actions.to(self.training_device, non_blocking=True)
             self.memory.values[step_nb] = values.to(self.training_device, non_blocking=True)
