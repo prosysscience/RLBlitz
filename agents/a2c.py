@@ -84,10 +84,12 @@ class A2C:
 
     def update(self):
         self.statistics.start_update()
-        self.model = self.model.to(self.training_device, non_blocking=True)
         if self.optimizer is None:
+            self.model = self.model.to(self.training_device, non_blocking=False)
             self.optimizer = self.config['optimizer'](self.model.parameters(), lr=self.config['lr_initial'])
             self.scheduler = self.config['lr_scheduler'](self.optimizer)
+        else:
+            self.model = self.model.to(self.training_device, non_blocking=True)
 
         with torch.no_grad():
             returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float, device=self.training_device)
