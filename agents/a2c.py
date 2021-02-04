@@ -31,8 +31,8 @@ class A2C:
                                  config['hidden_size'], config['logistic_function'])
         wandb.watch(self.model)
         self.distribution = config['distribution']
-        self.optimizer = config['optimizer'](self.model.parameters(), lr=config['lr_initial'])
-        self.scheduler = config['lr_scheduler'](self.optimizer)
+        self.optimizer = None
+        self.scheduler = None
         self.states = self.envs.reset()
         self.training_device = torch.device('cuda' if self.config['use_gpu'] and torch.cuda.is_available() else 'cpu')
         self.inference_device = torch.device('cuda' if self.config['workers_use_gpu'] and torch.cuda.is_available()
@@ -84,7 +84,11 @@ class A2C:
     def update(self):
         self.statistics.start_update()
         self.model = self.model.to(self.training_device, non_blocking=True)
-        optimizer_to(self.optimizer, self.training_device)
+        if self.optimizer is None:
+            self.optimizer = self.config['optimizer'](self.model.parameters(), lr=self.config['lr_initial'])
+            self.scheduler = self.config['lr_scheduler'](self.optimizer)
+        else:
+            self.optimizer.load_state_dict(self.model.state_dict())
         with torch.no_grad():
             returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float, device=self.training_device)
             not_terminal = torch.logical_not(self.memory.is_terminals)
