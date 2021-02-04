@@ -47,8 +47,8 @@ class A2C:
         if self.training_device != self.inference_device:
             self.training_model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'],
                                               config['hidden_size'], config['logistic_function'])
-            self.training_model.load_state_dict(self.inference_model.state_dict()).to(self.training_device,
-                                                                                      non_blocking=True)
+            self.training_model.load_state_dict(self.inference_model.state_dict())
+            self.training_model.to(self.training_device, non_blocking=True)
         else:
             self.training_model = self.inference_model
         wandb.watch(self.training_model)
@@ -77,11 +77,12 @@ class A2C:
 
             rewards_tensor = torch.from_numpy(rewards).to(self.training_device, non_blocking=True)
             dones_tensor = torch.from_numpy(dones).to(self.training_device, non_blocking=True)
-            self.memory.rewards[step_nb] = rewards_tensor
-            self.memory.is_terminals[step_nb] = dones_tensor
 
             self.states = next_states
             self.states_tensor = torch.from_numpy(self.states).to(self.inference_device, non_blocking=True)
+
+            self.memory.rewards[step_nb] = rewards_tensor
+            self.memory.is_terminals[step_nb] = dones_tensor
 
             self.statistics.add_rewards(rewards)
             # Statistics
