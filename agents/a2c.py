@@ -36,23 +36,31 @@ class A2C:
         self.lr = config['lr_initial']
 
         self.distribution = config['distribution']
-        self.model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'],
-                                 config['hidden_size'], config['logistic_function'])
-        self.model.to(self.inference_device, non_blocking=True)
-        wandb.watch(self.model)
-        self.optimizer = config['optimizer'](self.model.parameters(), lr=config['lr_initial'])
-        self.scheduler = config['lr_scheduler'](self.optimizer)
+
         self.states = self.envs.reset()
         self.states_tensor = torch.from_numpy(self.states).to(self.inference_device, non_blocking=True)
         self.memory = Memory(config, self.state_dim, self.training_device)
+
+        self.inference_model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'],
+                                 config['hidden_size'], config['logistic_function'])
+        self.inference_model.to(self.inference_device, non_blocking=True)
+        if self.training_device != self.inference_device:
+            self.training_model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'],
+                                              config['hidden_size'], config['logistic_function'])
+            self.training_model.load_state_dict(self.inference_model.state_dict()).to(self.training_device,
+                                                                                      non_blocking=True)
+        else:
+            self.training_model = self.inference_model
+        wandb.watch(self.training_model)
+        self.optimizer = config['optimizer'](self.training_model.parameters(), lr=config['lr_initial'])
+        self.scheduler = config['lr_scheduler'](self.optimizer)
 
     def act(self):
         self.statistics.start_act()
         self.memory.clear()
         for step_nb in range(self.num_steps):
             self.statistics.start_step()
-            self.model = self.model.to(self.inference_device, non_blocking=True)
-            probabilities, values = self.model(self.states_tensor)
+            probabilities, values = self.inference_model(self.states_tensor)
             wandb.log({'inference_time': time.time() - self.statistics.time_start_step},
                       step=self.statistics.iteration)
             dist = self.distribution(probabilities)
@@ -90,15 +98,11 @@ class A2C:
     def update(self):
         self.statistics.start_update()
         self.optimizer.zero_grad(set_to_none=True)
-        if self.inference_device != self.training_device:
-            optimizer_to(self.optimizer, self.training_device)
-            #optimizer_to(self.scheduler, self.training_device)
         with torch.no_grad():
+            self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
             returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float, device=self.training_device)
             not_terminal = torch.logical_not(self.memory.is_terminals)
-            self.model.value_network = self.model.value_network.to(self.training_device, non_blocking=True)
-            self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
-            return_value = self.model.value_network(self.states_tensor).view(-1)
+            return_value = self.training_model.value_network(self.states_tensor).view(-1)
             index = len(self.memory) - 1
             for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
                 return_value = reward + (non_terminal * self.gamma * return_value)
@@ -127,11 +131,11 @@ class A2C:
 
         loss.backward()
         if self.config['clip_grad_norm'] is not None:
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['clip_grad_norm'])
+            torch.nn.utils.clip_grad_norm_(self.training_model.parameters(), self.config['clip_grad_norm'])
         self.optimizer.step()
         self.scheduler.step()
         self.states_tensor = self.states_tensor.to(self.inference_device, non_blocking=True)
-        self.model.value_network = self.model.value_network.to(self.inference_device, non_blocking=True)
+        self.inference_model.load_state_dict(self.training_model.state_dict())
         self.statistics.end_update()
         wandb.log({'training_time': time.time() - self.statistics.time_start_update},
                   step=self.statistics.iteration)
@@ -159,7 +163,7 @@ class A2C:
             while torch.sum(episode_done_worker) < number_worker:
                 rendering_env.render(mode='rgb_array')
                 states_tensor = torch.from_numpy(rendering_states)
-                probabilities = self.model.actor_network(states_tensor)
+                probabilities = self.inference_model.actor_network(states_tensor)
                 dist = self.distribution(probabilities)
                 actions = dist.sample()
                 actions = actions.to('cpu', non_blocking=True)
@@ -169,13 +173,14 @@ class A2C:
         rendering_env.close()
 
     def save_model(self, path='a2c_default'):
-        torch.save(self.model.state_dict(), path + ".h5")
+        torch.save(self.inference_model.state_dict(), path + ".h5")
         wandb.save(path + '.h5')
 
     def load_model(self, path='a2c_default'):
-        wandb.unwatch(self.model)
-        self.model = torch.load(path)
-        wandb.watch(self.model)
+        wandb.unwatch(self.training_model)
+        self.inference_model = torch.load(path).to(self.inference_device)
+        self.training_model = torch.load(path).to(self.training_device)
+        wandb.watch(self.training_model)
 
     def save_agent_checkpoint(self, path='a2c_default_checkpoint'):
         pass

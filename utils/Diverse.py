@@ -23,7 +23,7 @@ def init_and_seed(config):
 
 
 def optimizer_to(optim, device):
-    for param in optim.state.values():
+    for param in optim.state_dict():
         # Not sure there are any global tensors in the state dict
         if isinstance(param, torch.Tensor):
             param.data = param.data.to(device, non_blocking=True)
