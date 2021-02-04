@@ -275,3 +275,7 @@ gen
 # Wandb specific
 wandb
 wandb/**
+
+tmp/videos/**
+
+*.h5

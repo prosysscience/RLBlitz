@@ -1,5 +1,4 @@
 import time
-import dill
 import wandb
 import torch
 
@@ -7,7 +6,6 @@ from configs.a2c_default import default_a2c_config
 from models.ActorCritic import ActorCritic
 from utils.Memory import Memory
 from utils.InitLibrary import init_and_seed
-from utils.Statistics import Statistics
 from utils.vec_env.util import create_subproc_env
 
 import torch.optim.lr_scheduler
@@ -20,7 +18,7 @@ class A2C:
         init_and_seed(config)
         self.config = config
         self.envs, self.env_info = create_subproc_env(config['env_id'], config['seed'], config['num_worker'],
-                                                      config['shared_memory'], config['env_copy'])
+                                                      config['shared_memory'], config['env_copy'], False)
         self.num_worker = config['num_worker']
         self.num_steps = config['num_steps']
         self.gamma = config['gamma']
@@ -70,9 +68,9 @@ class A2C:
             # Statistics
             for worker_id, done in enumerate(dones):
                 if done:
-                    wandb.log({'episode_number': self.statistics.episode_number,
-                               'episode_return': self.statistics.episode_return[worker_id],
-                               'episode_len': self.statistics.episode_len[worker_id]}, step=self.statistics.iteration)
+                    wandb.log({'episode_return': self.statistics.episode_return[worker_id],
+                               'episode_len': self.statistics.episode_len[worker_id],
+                               'episode_number': self.statistics.episode_number}, step=self.statistics.iteration)
                     self.statistics.episode_done(worker_id)
 
             self.statistics.end_step()
@@ -134,6 +132,24 @@ class A2C:
                    'time_this_iter': time.time() - self.statistics.time_start_train},
                   step=self.statistics.iteration)
 
+    def render(self, number_worker=4):
+        rendering_env, _ = create_subproc_env(self.config['env_id'], self.config['seed'], number_worker,
+                                                      self.config['shared_memory'], self.config['env_copy'], True)
+        rendering_states = rendering_env.reset()
+        with torch.no_grad():
+            episode_done_worker = torch.zeros(number_worker, dtype=torch.bool)
+            while torch.sum(episode_done_worker) < number_worker:
+                rendering_env.render()
+                states_tensor = torch.from_numpy(rendering_states)
+                probabilities = self.model.actor_network(states_tensor)
+                dist = self.distribution(probabilities)
+                actions = dist.sample()
+                actions = actions.to('cpu', non_blocking=True)
+                rendering_states, rewards, dones, _ = rendering_env.step(actions.numpy())
+                episode_done_worker += dones
+            rendering_env.render()
+        rendering_env.close()
+
     def save_model(self, path='a2c_default'):
         torch.save(self.model.state_dict(), path + ".h5")
         wandb.save(path + '.h5')
@@ -145,3 +161,5 @@ class A2C:
 
     def save_agent_checkpoint(self, path='a2c_default_checkpoint'):
         pass
+
+
