@@ -92,7 +92,7 @@ class A2C:
         self.optimizer.zero_grad(set_to_none=True)
         if self.inference_device != self.training_device:
             optimizer_to(self.optimizer, self.training_device)
-            optimizer_to(self.scheduler, self.training_device)
+            #optimizer_to(self.scheduler, self.training_device)
         with torch.no_grad():
             returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float, device=self.training_device)
             not_terminal = torch.logical_not(self.memory.is_terminals)
