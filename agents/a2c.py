@@ -26,7 +26,6 @@ class A2C:
         self.statistics = config['statistics'](self.num_worker)
         self.state_dim = self.env_info.observation_space.shape[0]
         self.action_dim = self.env_info.action_space.n
-        self.memory = Memory(config, self.state_dim)
         self.lr = config['lr_initial']
         self.model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'],
                                  config['hidden_size'], config['logistic_function'])
@@ -39,6 +38,7 @@ class A2C:
         self.inference_device = torch.device('cuda' if self.config['workers_use_gpu'] and torch.cuda.is_available()
                                              else 'cpu')
         self.states_tensor = torch.from_numpy(self.states).to(self.inference_device, non_blocking=True)
+        self.memory = Memory(config, self.state_dim, self.training_device)
 
     def act(self):
         self.statistics.start_act()
