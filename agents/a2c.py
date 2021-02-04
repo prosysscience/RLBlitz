@@ -96,6 +96,7 @@ class A2C:
         with torch.no_grad():
             returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float, device=self.training_device)
             not_terminal = torch.logical_not(self.memory.is_terminals)
+            self.model.value_network = self.model.value_network.to(self.training_device, non_blocking=True)
             self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
             return_value = self.model.value_network(self.states_tensor).view(-1)
             index = len(self.memory) - 1
@@ -130,6 +131,7 @@ class A2C:
         self.optimizer.step()
         self.scheduler.step()
         self.states_tensor = self.states_tensor.to(self.inference_device, non_blocking=True)
+        self.model.value_network = self.model.value_network.to(self.inference_device, non_blocking=True)
         self.statistics.end_update()
         wandb.log({'training_time': time.time() - self.statistics.time_start_update},
                   step=self.statistics.iteration)
