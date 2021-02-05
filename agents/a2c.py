@@ -28,7 +28,7 @@ class A2C:
         self.gamma = config['gamma']
         self.lambda_gae = config['lambda_gae']
         self.device = torch.device("cuda:0" if config['use_gpu'] else "cpu")
-        self.statistics = config['statistics'](self.num_worker)
+        self.statistics = config['statistics'](self.config)
         self.state_dim = self.env_info.observation_space.shape[0]
         self.action_dim = self.env_info.action_space.n
         self.lr = config['lr_initial']
@@ -145,7 +145,6 @@ class A2C:
                     index -= 1
             # view is better than squeeze because it avoid copy
             advantage = returns - values[:-1]
-            return advantage
         else:
             with torch.no_grad():
                 self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
@@ -161,7 +160,7 @@ class A2C:
             # view is better than squeeze because it avoid copy
             values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
             advantage = returns - values
-            return advantage
+        return advantage
 
     def train(self):
         self.statistics.start_train()

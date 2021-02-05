@@ -18,10 +18,10 @@ default_config = {
     'num_worker': multiprocessing.cpu_count() * 4,
 
     # NN CONFIG
-    'hidden_size': [64, 64],
+    'hidden_size': [128, 128],
     'activation_fn': nn.ReLU(),
     'optimizer': optim.Adam,  # if you need more control, you can define a lambda
-    'lr_initial': 1e-4,
+    'lr_initial': 5e-5,
     # default scheduler is constant, x represent the optimizer
     'lr_scheduler': lambda x: torch.optim.lr_scheduler.LambdaLR(x, lr_lambda=lambda epoch: 1.0),
     'clip_grad_norm': None,

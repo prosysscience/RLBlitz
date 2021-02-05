@@ -8,7 +8,7 @@ default_a2c_config = {
     'distribution': Categorical,
     # Lamdba-GAE: https://arxiv.org/abs/1506.02438
     'use_gae': True,
-    'lambda_gae': 0.9,
+    'lambda_gae': 0.95,
     # only valuable with large batches
     'normalize_advantage': False,
     'vf_coeff': 0.5,
