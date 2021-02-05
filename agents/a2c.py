@@ -1,15 +1,12 @@
-import io
 import time
 
-import cloudpickle
-import dill
 import wandb
 import torch
 
 from configs.a2c_default import default_a2c_config
 from models.ActorCritic import ActorCritic
 from utils.Memory import Memory
-from utils.Diverse import init_and_seed, optimizer_to
+from utils.Diverse import init_and_seed
 from utils.vec_env.util import create_subproc_env
 
 import torch.optim.lr_scheduler
@@ -29,6 +26,7 @@ class A2C:
         self.num_worker = config['num_worker']
         self.num_steps = config['num_steps']
         self.gamma = config['gamma']
+        self.lambda_gae = config['lambda_gae']
         self.device = torch.device("cuda:0" if config['use_gpu'] else "cpu")
         self.statistics = config['statistics'](self.num_worker)
         self.state_dim = self.env_info.observation_space.shape[0]
@@ -39,7 +37,7 @@ class A2C:
 
         self.states = self.envs.reset()
         self.states_tensor = torch.from_numpy(self.states).to(self.inference_device, non_blocking=True)
-        self.memory = Memory(config, self.state_dim, self.training_device)
+        self.memory = Memory(config, self.state_dim, self.training_device, self.config['use_gae'])
 
         self.inference_model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'],
                                  config['hidden_size'], config['logistic_function'])
@@ -99,20 +97,8 @@ class A2C:
     def update(self):
         self.statistics.start_update()
         self.optimizer.zero_grad(set_to_none=True)
-        with torch.no_grad():
-            self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
-            returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float, device=self.training_device)
-            not_terminal = torch.logical_not(self.memory.is_terminals)
-            return_value = self.training_model.value_network(self.states_tensor).view(-1)
-            index = len(self.memory) - 1
-            for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
-                return_value = reward + (non_terminal * self.gamma * return_value)
-                returns[index] = return_value
-                index -= 1
-        # view is better than squeeze because it
-        values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
 
-        advantage = returns - values
+        advantage = self._compute_advantage(self.config['use_gae'])
 
         critic_loss = advantage.pow(2).mean()
 
@@ -140,6 +126,42 @@ class A2C:
         self.statistics.end_update()
         wandb.log({'training_time': time.time() - self.statistics.time_start_update},
                   step=self.statistics.iteration)
+
+    def _compute_advantage(self, use_gae=True):
+        if use_gae:
+            with torch.no_grad():
+                self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
+                returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float,
+                                      device=self.training_device)
+                not_terminal = torch.logical_not(self.memory.is_terminals)
+                self.memory.values[self.num_steps] = self.training_model.value_network(self.states_tensor)
+                values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
+                gae = 0
+                index = len(self.memory) - 1
+                for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
+                    delta = reward + ((non_terminal * self.gamma * values[index + 1]) - values[index])
+                    gae = delta + self.gamma * self.lambda_gae * non_terminal * gae
+                    returns[index] = gae
+                    index -= 1
+            # view is better than squeeze because it avoid copy
+            advantage = returns - values[:-1]
+            return advantage
+        else:
+            with torch.no_grad():
+                self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
+                returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float,
+                                      device=self.training_device)
+                not_terminal = torch.logical_not(self.memory.is_terminals)
+                return_value = self.training_model.value_network(self.states_tensor).view(-1)
+                index = len(self.memory) - 1
+                for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
+                    return_value = reward + (non_terminal * self.gamma * return_value)
+                    returns[index] = return_value
+                    index -= 1
+            # view is better than squeeze because it avoid copy
+            values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
+            advantage = returns - values
+            return advantage
 
     def train(self):
         self.statistics.start_train()

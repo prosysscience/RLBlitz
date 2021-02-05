@@ -17,34 +17,7 @@ def init_and_seed(config):
     '''
     This makes the experiments fully reproducible, but can impact performance
     so it's not activate by default
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
     '''
-
-
-def optimizer_to(optim, device):
-    for param in optim.state_dict():
-        # Not sure there are any global tensors in the state dict
-        if isinstance(param, torch.Tensor):
-            param.data = param.data.to(device, non_blocking=True)
-            if param._grad is not None:
-                param._grad.data = param._grad.data.to(device, non_blocking=True)
-        elif isinstance(param, dict):
-            for subparam in param.values():
-                if isinstance(subparam, torch.Tensor):
-                    subparam.data = subparam.data.to(device, non_blocking=True)
-                    if subparam._grad is not None:
-                        subparam._grad.data = subparam._grad.data.to(device, non_blocking=True)
-    for group in optim.param_groups:
-        for param in group.values():
-            # Not sure there are any global tensors in the state dict
-            if isinstance(param, torch.Tensor):
-                param.data = param.data.to(device, non_blocking=True)
-                if param._grad is not None:
-                    param._grad.data = param._grad.data.to(device, non_blocking=True)
-            elif isinstance(param, dict):
-                for subparam in param.values():
-                    if isinstance(subparam, torch.Tensor):
-                        subparam.data = subparam.data.to(device, non_blocking=True)
-                        if subparam._grad is not None:
-                            subparam._grad.data = subparam._grad.data.to(device, non_blocking=True)
+    if config['cudnn_trade_perf_for_reproducibility']:
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
