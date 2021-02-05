@@ -12,7 +12,7 @@ default_a2c_config = {
     # only valuable with large batches
     'normalize_advantage': False,
     'vf_coeff': 0.5,
-    'entropy_coeff': 1e-4,
+    'entropy_coeff': 1e-5,
 }
 
 # we import the default configs

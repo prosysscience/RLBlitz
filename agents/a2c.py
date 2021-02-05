@@ -39,12 +39,10 @@ class A2C:
         self.states_tensor = torch.from_numpy(self.states).to(self.inference_device, non_blocking=True)
         self.memory = Memory(config, self.state_dim, self.training_device, self.config['use_gae'])
 
-        self.inference_model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'],
-                                 config['hidden_size'], config['logistic_function'])
+        self.inference_model = ActorCritic(config, self.state_dim, self.action_dim)
         self.inference_model.to(self.inference_device, non_blocking=True)
         if self.training_device != self.inference_device:
-            self.training_model = ActorCritic(self.state_dim, self.action_dim, config['activation_fn'],
-                                              config['hidden_size'], config['logistic_function'])
+            self.training_model = ActorCritic(config, self.state_dim, self.action_dim)
             self.training_model.load_state_dict(self.inference_model.state_dict())
             self.training_model.to(self.training_device, non_blocking=True)
         else:
