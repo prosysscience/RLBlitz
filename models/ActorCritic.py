@@ -26,13 +26,21 @@ class AbstractActorCritic(nn.Module, ABC):
 class ActorCritic(AbstractActorCritic):
     def __init__(self, config, state_dim, action_dim):
         super(ActorCritic, self).__init__(config, state_dim, action_dim)
-        activation = config['activation_fn']
-        hidden_layers = config['nn_architecture']
-        logistic_function = config['logistic_function']
-        # actor
-        self.actor_network = MLP(state_dim, action_dim, activation, hidden_layers, logistic_function)
-        # critic
-        self.value_network = MLP(state_dim, 1, activation, hidden_layers)
+
+        self.common_layers = config['common_layers'](state_dim)
+
+        if self.common_layers is not None:
+            self.actor_network = nn.Sequential(
+                self.common_layers,
+                config['actor_layers'](state_dim, action_dim)
+            )
+            self.value_network = nn.Sequential(
+                self.common_layers,
+                config['critic_layers'](state_dim)
+            )
+        else:
+            self.actor_network = config['actor_layers'](state_dim, action_dim)
+            self.value_network = config['critic_layers'](state_dim)
 
     def forward(self, state):
         return self.actor(state), self.critic(state)

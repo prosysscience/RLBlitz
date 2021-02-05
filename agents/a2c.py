@@ -38,14 +38,11 @@ class A2C:
         self.states = self.envs.reset()
         self.states_tensor = torch.from_numpy(self.states).to(self.inference_device, non_blocking=True)
         self.memory = Memory(config, self.state_dim, self.training_device, self.config['use_gae'])
-        if isinstance(self.config['nn_architecture'], list):
-            neural_network_model = ActorCritic
-        else:
-            neural_network_model = self.config['nn_architecture']
-        self.inference_model = neural_network_model(config, self.state_dim, self.action_dim)
+        neural_network_architecture = self.config['nn_template']
+        self.inference_model = neural_network_architecture(config, self.state_dim, self.action_dim)
         self.inference_model.to(self.inference_device, non_blocking=True)
         if self.training_device != self.inference_device:
-            self.training_model = neural_network_model(config, self.state_dim, self.action_dim)
+            self.training_model = neural_network_architecture(config, self.state_dim, self.action_dim)
             self.training_model.load_state_dict(self.inference_model.state_dict())
             self.training_model.to(self.training_device, non_blocking=True)
         else:
