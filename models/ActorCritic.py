@@ -1,13 +1,12 @@
 import torch.nn as nn
 
-from models.MLP import MLP
 from abc import ABC, abstractmethod
 
 
 class AbstractActorCritic(nn.Module, ABC):
 
     @abstractmethod
-    def __init__(self, config, state_dim, action_dim):
+    def __init__(self, state_dim, action_dim, **kwargs):
         super().__init__()
 
     @abstractmethod
@@ -24,29 +23,21 @@ class AbstractActorCritic(nn.Module, ABC):
 
 
 class ActorCritic(AbstractActorCritic):
-    def __init__(self, config, state_dim, action_dim):
-        super(ActorCritic, self).__init__(config, state_dim, action_dim)
+    def __init__(self, state_dim, action_dim, common_layers, actor_layers, critic_layers):
+        super(ActorCritic, self).__init__(state_dim, action_dim)
 
-        self.common_layers = config['common_layers'](state_dim)
-
-        if self.common_layers is not None:
-            self.actor_network = nn.Sequential(
-                self.common_layers,
-                config['actor_layers'](state_dim, action_dim)
-            )
-            self.value_network = nn.Sequential(
-                self.common_layers,
-                config['critic_layers'](state_dim)
-            )
-        else:
-            self.actor_network = config['actor_layers'](state_dim, action_dim)
-            self.value_network = config['critic_layers'](state_dim)
+        self.common_network = common_layers(state_dim)
+        self.actor_network = actor_layers(state_dim, action_dim)
+        self.value_network = critic_layers(state_dim)
 
     def forward(self, state):
-        return self.actor(state), self.critic(state)
+        x = self.common_network(state)
+        return self.actor_network(x), self.value_network(x)
 
     def actor(self, state):
-        return self.actor_network(state)
+        x = self.common_network(state)
+        return self.actor_network(x)
 
     def critic(self, state):
-        return self.value_network(state)
+        x = self.common_network(state)
+        return self.value_network(x)
