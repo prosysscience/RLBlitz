@@ -1,19 +1,21 @@
 import time
 
+import cloudpickle
 import wandb
 import torch
 
+from agents.abstract_agent import AbstractAgent
 from configs.a2c_default import default_a2c_config
 from utils.Memory import Memory
 from utils.Diverse import init_and_seed
 from utils.vec_env.util import create_subproc_env
 
-import torch.optim.lr_scheduler
 
 
-class A2C:
+class A2C(AbstractAgent):
 
     def __init__(self, config=default_a2c_config):
+        super().__init__(config)
         wandb.init(config=config, monitor_gym=True)
         init_and_seed(config)
         self.config = config
@@ -25,7 +27,6 @@ class A2C:
         self.num_steps = config['num_steps']
         self.gamma = config['gamma']
         self.lambda_gae = config['lambda_gae']
-        self.device = torch.device("cuda:0" if config['use_gpu'] else "cpu")
         self.statistics = config['statistics'](self.config)
         self.state_dim = self.env_info.observation_space.shape[0]
         self.action_dim = self.env_info.action_space.n
@@ -190,15 +191,38 @@ class A2C:
             rendering_env.render(mode='rgb_array')
         rendering_env.close()
 
-    def save_model(self, path='a2c_default'):
-        torch.save(self.inference_model.state_dict(), path + ".h5")
-        wandb.save(path + '.h5')
+    def save_model(self, filename='a2c_default.h5'):
+        torch.save(self.inference_model.state_dict(), filename)
+        wandb.save(filename)
 
-    def load_model(self, path='a2c_default'):
+    def load_model(self, filename='a2c_default'):
         wandb.unwatch(self.training_model)
-        self.inference_model = torch.load(path).to(self.inference_device)
-        self.training_model = torch.load(path).to(self.training_device)
+        self.inference_model = torch.load(filename).to(self.inference_device)
+        self.training_model = torch.load(filename).to(self.training_device)
         wandb.watch(self.training_model)
 
-    def save_agent_checkpoint(self, path='a2c_default_checkpoint'):
-        pass
+    def save_agent_checkpoint(self, filename='a2c_default_checkpoint.pickle'):
+        to_save = {'statistics': self.statistics,
+                   'inference_model': self.inference_model.state_dict(),
+                   'training_model': self.training_model.state_dict(),
+                   'optimizer': self.optimizer.state_dict(),
+                   'scheduler': self.scheduler.state_dict(),
+                   'memory': self.memory,
+                   'distribution': self.distribution,
+                   'config': self.config}
+        with open(filename, 'wb') as f:
+            cloudpickle.dump(to_save, f)
+
+    @classmethod
+    def load_agent_checkpoint(cls, filename='a2c_default_checkpoint.pickle'):
+        with open(filename, 'rb') as f:
+            saved_data = cloudpickle.load(f)
+            new_class = cls(saved_data['config'])
+            new_class.memory = saved_data['memory']
+            new_class.statistics = saved_data['statistics']
+            new_class.distribution = saved_data['distribution']
+            new_class.inference_model.load_state_dict(saved_data['inference_model'])
+            new_class.training_model.load_state_dict(saved_data['training_model'])
+            new_class.optimizer.load_state_dict(saved_data['optimizer'])
+            new_class.scheduler.load_state_dict(saved_data['scheduler'])
+            return new_class
