@@ -4,7 +4,6 @@ import wandb
 import torch
 
 from configs.a2c_default import default_a2c_config
-from models.ActorCritic import ActorCritic
 from utils.Memory import Memory
 from utils.Diverse import init_and_seed
 from utils.vec_env.util import create_subproc_env
@@ -20,9 +19,8 @@ class A2C:
         self.config = config
         self.envs, self.env_info = create_subproc_env(config['env_id'], config['seed'], config['num_worker'],
                                                       config['shared_memory'], config['env_copy'], False)
-        self.training_device = torch.device('cuda' if self.config['use_gpu'] and torch.cuda.is_available() else 'cpu')
-        self.inference_device = torch.device('cuda' if self.config['workers_use_gpu'] and torch.cuda.is_available()
-                                             else 'cpu')
+        self.training_device = config['training_device']
+        self.inference_device = config['inference_device']
         self.num_worker = config['num_worker']
         self.num_steps = config['num_steps']
         self.gamma = config['gamma']

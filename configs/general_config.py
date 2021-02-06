@@ -29,9 +29,10 @@ default_config = {
     # default scheduler is constant, x represent the optimizer
     'lr_scheduler': lambda x: torch.optim.lr_scheduler.LambdaLR(x, lr_lambda=lambda epoch: 1.0),
     'clip_grad_norm': None,
-    'use_gpu': torch.cuda.is_available(),
-    # we inference is done on CPU and the training can be done on GPU is activated
-    'workers_use_gpu': False,
+    # devices
+    'training_device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+    # the device uses by the worker to compute actions they will perform
+    'inference_device': torch.device('cpu'),
 
     # STATISTICS CONFIG
     # for more control about how to handle the stats, modify this
