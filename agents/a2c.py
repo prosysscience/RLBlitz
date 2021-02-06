@@ -132,7 +132,7 @@ class A2C:
                 returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float,
                                       device=self.training_device)
                 not_terminal = torch.logical_not(self.memory.is_terminals)
-                self.memory.values[self.num_steps] = self.training_model.critic(self.states_tensor)
+                self.memory.values[self.num_steps] = self.training_model.critic_only(self.states_tensor)
                 values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
                 gae = 0
                 index = len(self.memory) - 1
@@ -149,7 +149,7 @@ class A2C:
                 returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float,
                                       device=self.training_device)
                 not_terminal = torch.logical_not(self.memory.is_terminals)
-                return_value = self.training_model.critic(self.states_tensor).view(-1)
+                return_value = self.training_model.critic_only(self.states_tensor).view(-1)
                 index = len(self.memory) - 1
                 for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
                     return_value = reward + (non_terminal * self.gamma * return_value)
@@ -183,7 +183,7 @@ class A2C:
             while torch.sum(episode_done_worker) < number_worker:
                 rendering_env.render(mode='rgb_array')
                 states_tensor = torch.from_numpy(rendering_states)
-                probabilities = self.inference_model.actor(states_tensor)
+                probabilities = self.inference_model.actor_only(states_tensor)
                 dist = self.distribution(probabilities)
                 actions = dist.sample()
                 actions = actions.to('cpu', non_blocking=True)

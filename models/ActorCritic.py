@@ -14,11 +14,11 @@ class AbstractActorCritic(nn.Module, ABC):
         pass
 
     @abstractmethod
-    def actor(self, state):
+    def actor_only(self, state):
         pass
 
     @abstractmethod
-    def critic(self, state):
+    def critic_only(self, state):
         pass
 
 
@@ -34,10 +34,10 @@ class ActorCritic(AbstractActorCritic):
         x = self.common_network(state)
         return self.actor_network(x), self.value_network(x)
 
-    def actor(self, state):
+    def actor_only(self, state):
         x = self.common_network(state)
         return self.actor_network(x)
 
-    def critic(self, state):
+    def critic_only(self, state):
         x = self.common_network(state)
         return self.value_network(x)
