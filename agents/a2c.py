@@ -184,7 +184,7 @@ class A2C(AbstractAgent):
         with torch.no_grad():
             episode_done_worker = torch.zeros(number_workers, dtype=torch.bool)
             while torch.sum(episode_done_worker) < number_workers:
-                rendering_env.render(mode=mode)
+                rendering_env.get_images()
                 states_tensor = torch.from_numpy(rendering_states).to(self.inference_device, non_blocking=True)
                 probabilities = self.inference_model.actor_only(states_tensor)
                 dist = self.distribution(probabilities)
@@ -197,7 +197,7 @@ class A2C(AbstractAgent):
                 for worker_id, done in enumerate(dones):
                     if done:
                         rendering_statistics.episode_done(worker_id)
-            rendering_env.render(mode=mode)
+            rendering_env.get_images()
         rendering_env.close()
         return rendering_statistics
 
