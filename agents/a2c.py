@@ -52,13 +52,13 @@ class A2C(AbstractAgent):
         self.scheduler = config['lr_scheduler'](self.optimizer)
 
     def act(self):
-        self.statistics.start_act()
+        wandb.log(self.statistics.start_act(), step=self.statistics.iteration)
         self.memory.clear()
         for step_nb in range(self.num_steps):
-            self.statistics.start_step()
+            wandb.log(self.statistics.start_step(), step=self.statistics.iteration)
+            inference_start = time.time()
             probabilities, values = self.inference_model(self.states_tensor)
-            wandb.log({'inference_time': time.time() - self.statistics.time_start_step},
-                      step=self.statistics.iteration)
+            wandb.log({'inference_time': time.time() - inference_start}, step=self.statistics.iteration)
             dist = self.distribution(probabilities)
             actions = dist.sample()
             logprobs = dist.log_prob(actions)
@@ -84,16 +84,12 @@ class A2C(AbstractAgent):
             # Statistics
             for worker_id, done in enumerate(dones):
                 if done:
-                    wandb.log({'episode_return': self.statistics.episode_return[worker_id],
-                               'episode_len': self.statistics.episode_len[worker_id],
-                               'episode_number': self.statistics.episode_number}, step=self.statistics.iteration)
-                    self.statistics.episode_done(worker_id)
-
-            self.statistics.end_step()
-        self.statistics.end_act()
+                    wandb.log(self.statistics.episode_done(worker_id), step=self.statistics.iteration)
+            wandb.log(self.statistics.end_step(), step=self.statistics.iteration)
+        wandb.log(self.statistics.end_act(), step=self.statistics.iteration)
 
     def update(self):
-        self.statistics.start_update()
+        wandb.log(self.statistics.start_update(), step=self.statistics.iteration)
         self.optimizer.zero_grad(set_to_none=True)
 
         advantage = self._compute_advantage(self.config['use_gae'])
@@ -112,7 +108,7 @@ class A2C(AbstractAgent):
 
         wandb.log({'total_loss': loss, 'actor_loss': actor_loss, 'critic_loss': critic_loss,
                    'entropy': self.memory.entropy, 'lr': self.scheduler.get_last_lr()[-1]},
-                  step=self.statistics.iteration)
+                  step=self.statistics.get_iteration_nb())
 
         loss.backward()
         if self.config['clip_grad_norm'] is not None:
@@ -121,9 +117,7 @@ class A2C(AbstractAgent):
         self.scheduler.step()
         self.states_tensor = self.states_tensor.to(self.inference_device, non_blocking=True)
         self.inference_model.load_state_dict(self.training_model.state_dict())
-        self.statistics.end_update()
-        wandb.log({'training_time': time.time() - self.statistics.time_start_update},
-                  step=self.statistics.iteration)
+        wandb.log(self.statistics.end_update(), step=self.statistics.get_iteration_nb())
 
     def _compute_advantage(self, use_gae=True):
         if use_gae:
@@ -161,16 +155,11 @@ class A2C(AbstractAgent):
         return advantage
 
     def train(self):
-        self.statistics.start_train()
-        self.statistics.episode_this_iter = 0
+        wandb.log(self.statistics.start_train(), step=self.statistics.iteration)
         self.act()
         self.update()
-        self.statistics.end_train()
-        wandb.log({'iteration': self.statistics.iteration,
-                   'episode_this_iter': self.statistics.episode_this_iter,
-                   'total_steps': self.statistics.total_step,
-                   'time_this_iter': time.time() - self.statistics.time_start_train},
-                  step=self.statistics.iteration)
+        wandb.log(self.statistics.end_train(),
+                  step=self.statistics.get_iteration_nb())
 
     def render(self, number_workers=None, mode='human'):
         if number_workers is None:

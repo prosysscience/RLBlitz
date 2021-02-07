@@ -15,7 +15,7 @@ default_config = {
     'num_steps': 5,
     'gamma': 0.99,
     'seed': 0,
-    'num_worker': multiprocessing.cpu_count() * 4,
+    'num_worker': multiprocessing.cpu_count(),
 
     # NN CONFIG
     # if nn_architecture is a list, it represents the size of the hidden layers in each NN
