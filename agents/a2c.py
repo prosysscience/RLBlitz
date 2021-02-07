@@ -1,15 +1,16 @@
+import copy
 import time
 
 import cloudpickle
 import wandb
 import torch
+from gym.wrappers import Monitor
 
 from agents.abstract_agent import AbstractAgent
 from configs.a2c_default import default_a2c_config
 from utils.Memory import Memory
 from utils.Diverse import init_and_seed
-from utils.vec_env.util import create_subproc_env
-
+from utils.vec_env.util import create_subproc_env, make_env
 
 
 class A2C(AbstractAgent):
@@ -171,25 +172,34 @@ class A2C(AbstractAgent):
                    'time_this_iter': time.time() - self.statistics.time_start_train},
                   step=self.statistics.iteration)
 
-    def render(self, number_worker=None):
-        if number_worker is None:
-            number_worker = self.num_worker
-        rendering_env, _ = create_subproc_env(self.config['env_id'], self.config['seed'], number_worker,
+    def render(self, number_workers=None, mode='human'):
+        if number_workers is None:
+            number_workers = self.num_worker
+        render_config = copy.deepcopy(self.config)
+        render_config['num_worker'] = number_workers
+        rendering_statistics = self.config['statistics'](render_config)
+        rendering_env, _ = create_subproc_env(self.config['env_id'], self.config['seed'], number_workers,
                                               self.config['shared_memory'], self.config['env_copy'], True)
         rendering_states = rendering_env.reset()
         with torch.no_grad():
-            episode_done_worker = torch.zeros(number_worker, dtype=torch.bool)
-            while torch.sum(episode_done_worker) < number_worker:
-                rendering_env.render(mode='rgb_array')
-                states_tensor = torch.from_numpy(rendering_states)
+            episode_done_worker = torch.zeros(number_workers, dtype=torch.bool)
+            while torch.sum(episode_done_worker) < number_workers:
+                rendering_env.render(mode=mode)
+                states_tensor = torch.from_numpy(rendering_states).to(self.inference_device, non_blocking=True)
                 probabilities = self.inference_model.actor_only(states_tensor)
                 dist = self.distribution(probabilities)
                 actions = dist.sample()
                 actions = actions.to('cpu', non_blocking=True)
                 rendering_states, rewards, dones, _ = rendering_env.step(actions.numpy())
                 episode_done_worker += dones
-            rendering_env.render(mode='rgb_array')
+                rendering_statistics.add_rewards(rewards)
+                # Statistics
+                for worker_id, done in enumerate(dones):
+                    if done:
+                        rendering_statistics.episode_done(worker_id)
+            rendering_env.render(mode=mode)
         rendering_env.close()
+        return rendering_statistics
 
     def save_model(self, filename='a2c_default.h5'):
         torch.save(self.inference_model.state_dict(), filename)

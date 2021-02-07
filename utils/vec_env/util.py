@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import gym
 from gym.vector import AsyncVectorEnv
 from gym.wrappers.monitor import Monitor
@@ -17,7 +19,7 @@ def make_env(env_name, seed=0, wrapper=None):
 
 def create_subproc_env(env_id='LunarLander-v2', seed=0, num_worker=1, shared_memory=False, copy=False, render=False):
     if render:
-        env_fn = [make_env(env_id, seed + i, wrapper=lambda x: Monitor(x, directory="./tmp/videos", force=True))
+        env_fn = [make_env(env_id, seed + i, wrapper=lambda x: Monitor(x, directory=f"./tmp/videos/{env_id}/{datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}/", force=True))
                   for i in range(num_worker)]
         return DummyVecEnv(env_fn), None
     else:
