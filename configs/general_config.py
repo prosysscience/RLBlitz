@@ -37,6 +37,16 @@ default_config = {
     # STATISTICS CONFIG
     # for more control about how to handle the stats, modify this
     'statistics': Statistics,
+    # WandB init configs: https://docs.wandb.ai/ref/init
+    'WandB_project': None,
+    'WandB_entity': None,
+    'WandB_group': None,
+    'WandB_job_type': None,
+    'WandB_tags': None,
+    'WandB_notes': None,
+    # define the frequency WandB logs gradients from model
+    # don't set too low or you will reach the api limits
+    'WandB_model_log_frequency': 100,
 
     # ADVANCED CONFIG (don't touch if you don't know what you're doing)
     # VecEnv option, don't touch if not needed

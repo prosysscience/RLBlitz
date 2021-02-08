@@ -1,4 +1,5 @@
 import copy
+import os
 import time
 
 import cloudpickle
@@ -17,7 +18,9 @@ class A2C(AbstractAgent):
 
     def __init__(self, config=default_a2c_config):
         super().__init__(config)
-        wandb.init(config=config, monitor_gym=True)
+        wandb.init(config=config, monitor_gym=True, resume="allow", project=config['WandB_project'],
+                   entity=config['WandB_entity'], group=config['WandB_group'], job_type=config['WandB_job_type'],
+                   tags=config['WandB_tags'], notes=config['WandB_notes'])
         init_and_seed(config)
         self.config = config
         self.envs, self.env_info = create_subproc_env(config['env_id'], config['seed'], config['num_worker'],
@@ -47,7 +50,7 @@ class A2C(AbstractAgent):
             self.training_model.to(self.training_device, non_blocking=True)
         else:
             self.training_model = self.inference_model
-        wandb.watch(self.training_model)
+        wandb.watch(self.training_model, log_freq=self.config['WandB_model_log_frequency'])
         self.optimizer = config['optimizer'](self.training_model.parameters(), lr=config['lr_initial'])
         self.scheduler = config['lr_scheduler'](self.optimizer)
 
@@ -198,7 +201,7 @@ class A2C(AbstractAgent):
         wandb.unwatch(self.training_model)
         self.inference_model = torch.load(filename).to(self.inference_device)
         self.training_model = torch.load(filename).to(self.training_device)
-        wandb.watch(self.training_model)
+        wandb.watch(self.training_model, log_freq=self.config['WandB_model_log_frequency'])
 
     def save_agent_checkpoint(self, filename='a2c_default_checkpoint.pickle'):
         to_save = {'statistics': self.statistics,
@@ -208,6 +211,7 @@ class A2C(AbstractAgent):
                    'scheduler': self.scheduler.state_dict(),
                    'memory': self.memory,
                    'distribution': self.distribution,
+                   'WandB_id': wandb.util.generate_id(),
                    'config': self.config}
         with open(filename, 'wb') as f:
             cloudpickle.dump(to_save, f)
@@ -216,6 +220,7 @@ class A2C(AbstractAgent):
     def load_agent_checkpoint(cls, filename='a2c_default_checkpoint.pickle'):
         with open(filename, 'rb') as f:
             saved_data = cloudpickle.load(f)
+            os.environ["WANDB_RUN_ID"] = saved_data['WandB_id']
             new_class = cls(saved_data['config'])
             new_class.memory = saved_data['memory']
             new_class.statistics = saved_data['statistics']
