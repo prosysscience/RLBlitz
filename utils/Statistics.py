@@ -73,13 +73,14 @@ class Statistics:
 
     def start_train(self):
         self.time_start_train = time.time()
-        self.episode_this_iter = 0
         return {}
 
     def end_train(self):
+        episodes_done = self.episode_this_iter
         self.iteration += 1
+        self.episode_this_iter = 0
         return {'iteration': self.iteration,
-                'episodes_this_iter': self.episode_this_iter,
+                'episodes_this_iter': episodes_done,
                 'total_steps': self.total_step,
                 'iteration_time': time.time() - self.time_start_train}
 
@@ -118,13 +119,14 @@ class SmoothedStatistics(Statistics):
         self.smoothing_episode_len.add(self.episode_len[worker_id])
         mean_episode_return, min_episode_return, max_episode_return = self.smoothing_episode_return.get_metric()
         mean_episode_len, min_episode_len, max_episode_len = self.smoothing_episode_len.get_metric()
-        result = {'mean_episode_return': mean_episode_return,
+        result = {'episode_return': self.episode_return[worker_id],
+                  'mean_episode_return': mean_episode_return,
                   'min_episode_return': min_episode_return,
                   'max_episode_return': max_episode_return,
+                  'episode_len': self.episode_len[worker_id],
                   'mean_episode_len': mean_episode_len,
                   'min_episode_len': min_episode_len,
                   'max_episode_len': max_episode_len,
-                  'episode_len': self.episode_len[worker_id],
                   'episode_number': self.episode_number}
         self.episode_return[worker_id] = 0
         self.episode_len[worker_id] = 0
@@ -144,37 +146,59 @@ class SmoothedStatistics(Statistics):
         return {}
 
     def end_step(self):
+        time_elapsed = time.time() - self.time_start_step
+        self.smoothing_start_step.add(time_elapsed)
+        mean_start_step, min_start_step, max_start_step = self.smoothing_start_step.get_metric()
         self.total_step += self.num_worker
-        return {'step_time': time.time() - self.time_start_step}
+        return {'step_time': time_elapsed,
+                'mean_start_step': mean_start_step,
+                'min_start_step': min_start_step,
+                'max_start_step': max_start_step}
 
     def start_act(self):
         self.time_start_act = time.time()
         return {}
 
     def end_act(self):
-        return {'acting_time': time.time() - self.time_start_act}
+        time_elapsed = time.time() - self.time_start_act
+        self.smoothing_start_act.add(time_elapsed)
+        mean_start_act, min_start_act, max_start_act = self.smoothing_start_act.get_metric()
+        return {'acting_time': time_elapsed,
+                'mean_acting_time': mean_start_act,
+                'min_acting_time': min_start_act,
+                'max_acting_time': max_start_act}
 
     def start_update(self):
         self.time_start_update = time.time()
         return {}
 
     def end_update(self):
-        return {'training_time': time.time() - self.time_start_update}
+        time_elapsed = time.time() - self.time_start_update
+        self.smoothing_start_update.add(time_elapsed)
+        mean_start_update, min_start_update, max_start_update = self.smoothing_start_inference.get_metric()
+        return {'training_time': time_elapsed,
+                'mean_training_time': mean_start_update,
+                'min_training_time': min_start_update,
+                'max_training_time': max_start_update}
 
     def start_train(self):
         self.time_start_train = time.time()
-        self.episode_this_iter = 0
         return {}
 
     def end_train(self):
-        self.smoothing_episodes_this_iter.add(self.episode_this_iter)
+        episodes_done = self.episode_this_iter
+        self.smoothing_episodes_this_iter.add(episodes_done)
         mean_episodes_this_iter, min_episodes_this_iter, max_episodes_this_iter = self.smoothing_episodes_this_iter.get_metric()
-        self.smoothing_start_train.add(time.time() - self.time_start_train)
+        time_elapsed = time.time() - self.time_start_train
+        self.smoothing_start_train.add(time_elapsed)
         mean_start_train, min_start_train, max_start_train = self.smoothing_start_train.get_metric()
         self.iteration += 1
-        return {'mean_episodes_this_iter': mean_episodes_this_iter,
+        self.episode_this_iter = 0
+        return {'episodes_this_iter': episodes_done,
+                'mean_episodes_this_iter': mean_episodes_this_iter,
                 'min_episodes_this_iter': min_episodes_this_iter,
                 'max_episodes_this_iter': max_episodes_this_iter,
+                'iteration_time': time_elapsed,
                 'mean_iteration_time': mean_start_train,
                 'min_iteration_time': min_start_train,
                 'max_iteration_time': max_start_train,
@@ -185,19 +209,23 @@ class SmoothedStatistics(Statistics):
         return {}
 
     def end_inference(self):
-        self.smoothing_start_inference.add(time.time() - self.time_start_inference)
+        time_elapsed = time.time() - self.time_start_inference
+        self.smoothing_start_inference.add(time_elapsed)
         mean_start_inference, min_start_inference, max_start_inference = self.smoothing_start_inference.get_metric()
-        return {'mean_inference_time': mean_start_inference,
-                'min_start_inference': min_start_inference,
-                'max_start_inference': max_start_inference}
+        return {'inference_time': time_elapsed,
+                'mean_inference_time': mean_start_inference,
+                'min_inference_time': min_start_inference,
+                'max_inference_time': max_start_inference}
 
     def start_env_wait(self):
         self.time_env_wait = time.time()
         return {}
 
     def end_env_wait(self):
-        self.smoothing_env_wait.add(time.time() - self.time_env_wait)
+        time_elapsed = time.time() - self.time_env_wait
+        self.smoothing_env_wait.add(time_elapsed)
         mean_env_wait, min_env_wait, max_env_wait = self.smoothing_env_wait.get_metric()
-        return {'mean_env_wait': mean_env_wait,
+        return {'env_wait': time_elapsed,
+                'mean_env_wait': mean_env_wait,
                 'min_env_wait': min_env_wait,
                 'max_env_wait': max_env_wait}
