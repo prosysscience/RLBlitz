@@ -7,6 +7,8 @@ class RunningMetrics:
 
     def __init__(self, config):
         self.config = config
+        assert config['metric_smoothing'] > 0, "If you use smoothing you need to set " \
+                                               "`metric_smoothing` value in config > 0"
         self.metric_smoothing = config['metric_smoothing']
         self.data = deque(maxlen=self.metric_smoothing)
         self.min = float('inf')
