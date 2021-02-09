@@ -107,6 +107,9 @@ class A2C(AbstractAgent):
 
         actor_loss = -(self.memory.logprobs * advantage.detach()).mean()
 
+        # we average entropy over numb of steps
+        self.memory.entropy /= self.num_steps
+
         loss = actor_loss + \
                self.config['vf_coeff'] * critic_loss - \
                self.config['entropy_coeff'] * self.memory.entropy

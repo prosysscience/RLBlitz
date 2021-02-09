@@ -15,7 +15,7 @@ default_config = {
     'num_steps': 5,
     'gamma': 0.99,
     'seed': 0,
-    'num_worker': multiprocessing.cpu_count(),
+    'num_worker': multiprocessing.cpu_count() * 8,
 
     # NN CONFIG
     # if nn_architecture is a list, it represents the size of the hidden layers in each NN
@@ -36,7 +36,7 @@ default_config = {
 
     # STATISTICS CONFIG
     # for more control about how to handle the stats, modify this
-    'statistics': SmoothedStatistics,
+    'statistics': Statistics,
     # for smoothing you need to use SmoothedStatistics, otherwise you can use Statistics
     'metric_smoothing': 1000,
     # WandB init configs: https://docs.wandb.ai/ref/init
