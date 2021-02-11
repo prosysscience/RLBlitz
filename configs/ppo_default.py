@@ -1,29 +1,22 @@
-import torch
-import multiprocessing
 import psutil
-from torch import optim, nn
+from torch import nn
 
-from utils.Statistics import Statistics, SmoothedStatistics
+from configs import a2c_default
+from utils.Diverse import init_weights, default_actor_critic
 
-default_config = {
+default_ppo_config = {
     #
     # BASIC CONFIG
     #
 
     # ENV CONFIG
     'env_id': 'LunarLander-v2',
-    'num_steps': 5,
+    'num_steps': 32,
     'gamma': 0.99,
     'seed': 0,
-    'num_worker': multiprocessing.cpu_count() * 8,
+    'num_worker': multiprocessing.cpu_count() * 4,
 
     # NN CONFIG
-    # if nn_architecture is a list, it represents the size of the hidden layers in each NN
-    # if you need special architecture, you can define your own neural network extending the AbstractActorCritic class
-    # and pass it simply, example: 'nn_architecture': MyNetwork,
-    # you can define extra key in the config to pass more info to your neural network
-    'nn_architecture': [128, 128],
-    'activation_fn': nn.ReLU(),
     'optimizer': optim.Adam,  # if you need more control, you can define a lambda
     'lr_initial': 1e-4,
     # None means constant
@@ -31,7 +24,7 @@ default_config = {
     # Example: 'lr_scheduler': lambda x: torch.optim.lr_scheduler.LambdaLR(x, lr_lambda=lambda epoch: 0.999**epoch),
     # x represent the optimizer, keep this structure
     'lr_scheduler': None,
-    'clip_grad_norm': None,
+    'clip_grad_norm': 0.5,
     # devices
     'training_device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
     # the device uses by the worker to compute actions they will perform
@@ -52,6 +45,54 @@ default_config = {
     # define the frequency WandB logs gradients from model
     # don't set too low or you will reach the api limits
     'WandB_model_log_frequency': 100,
+
+    # Actor Critic specific config
+    'distribution': Categorical,
+    # Lamdba-GAE: https://arxiv.org/abs/1506.02438
+    'use_gae': True,
+    'lambda_gae': 0.95,
+    # only valuable with large batches
+    'normalize_advantage': False,
+    'vf_coeff': 1.0,
+    'entropy_coeff': 1e-3,
+    # neural network
+    # define the template needs to inherit from AbstractActorCritic
+    # can be change if you need very specific behavior
+    'nn_template': ActorCritic,
+    # kwargs depend on your template
+    'nn_kwargs': {
+        # by default no common layers (input is also the output)
+        'common_layers': lambda input_size: lambda x: x,
+
+        # keep the lambda, it's important !
+        'critic_layers': lambda input_size: nn.Sequential(
+            nn.Linear(input_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1),
+        ),
+        # keep the lambda, it's important !
+        'actor_layers': lambda input_size, output_size: nn.Sequential(
+            nn.Linear(input_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, output_size),
+            nn.Softmax(dim=1)
+        ),
+    },
+    'critic_layers_initialization': lambda x: init_weights(x,
+                                                           function_output=lambda x: default_actor_critic(x, std=1.0)),
+    'actor_layers_initialization': init_weights,
+
+    # PPO Specific config
+    'ppo_epochs': 10,
+    'clipping_param': 0.2,
+    'mini_batch_size': 32,
+    'min_reward': -10,
+    'max_reward': 10,
+    'max_kl_div': None,
 
     # ADVANCED CONFIG (don't touch if you don't know what you're doing)
     # VecEnv option, don't touch if not needed

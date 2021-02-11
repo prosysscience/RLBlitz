@@ -3,6 +3,7 @@ import random
 
 import torch
 import numpy as np
+from torch import nn
 
 
 def init_and_seed(config):
@@ -39,3 +40,17 @@ class MockLRScheduler:
 
     def get_last_lr(self):
         return [self.lr]
+
+
+def default_actor_critic(x, mean=0., std=0.1):
+    return nn.init.normal_(x, mean=mean, std=std)
+
+
+def init_weights(m, function_hidden=default_actor_critic, bias_hidden=0.1,
+                 function_output=lambda x: default_actor_critic, bias_output=0.1):
+    linear_layers = [module for module in m.modules() if isinstance(module, nn.Linear)]
+    for layers in linear_layers[:-1]:
+        function_hidden(layers.weight)
+        nn.init.constant_(layers.bias, bias_hidden)
+    function_output(linear_layers[-1].weight)
+    nn.init.constant_(linear_layers[-1].bias, bias_output)

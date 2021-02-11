@@ -1,17 +1,15 @@
 import copy
 import os
-import time
 
 import cloudpickle
 import wandb
 import torch
-from gym.wrappers import Monitor
 
 from agents.abstract_agent import AbstractAgent
 from configs.a2c_default import default_a2c_config
 from utils.Memory import Memory
 from utils.Diverse import init_and_seed, MockLRScheduler
-from utils.vec_env.util import create_subproc_env, make_env
+from utils.vec_env.util import create_subproc_env
 
 
 class A2C(AbstractAgent):
@@ -43,6 +41,9 @@ class A2C(AbstractAgent):
         self.memory = Memory(config, self.state_dim, self.training_device, self.config['use_gae'])
         neural_network_architecture = self.config['nn_template']
         self.inference_model = neural_network_architecture(self.state_dim, self.action_dim, **config['nn_kwargs'])
+        if self.config['critic_layers_initialization'] is not None:
+            self.config['critic_layers_initialization'](self.inference_model.get_critic())
+            self.config['actor_layers_initialization'](self.inference_model.get_actor())
         self.inference_model.to(self.inference_device, non_blocking=True)
         if self.training_device != self.inference_device:
             self.training_model = neural_network_architecture(self.state_dim, self.action_dim, **config['nn_kwargs'])
@@ -67,12 +68,12 @@ class A2C(AbstractAgent):
             wandb.log(self.statistics.end_inference(), step=self.statistics.get_iteration())
             dist = self.distribution(probabilities)
             actions = dist.sample()
-            logprobs = dist.log_prob(actions)
+            log_prob = dist.log_prob(actions)
             actions = actions.to('cpu', non_blocking=True)
 
             self.memory.actions[step_nb] = actions.to(self.training_device, non_blocking=True)
             self.memory.values[step_nb] = values.to(self.training_device, non_blocking=True)
-            self.memory.logprobs[step_nb] = logprobs.to(self.training_device, non_blocking=True)
+            self.memory.logprobs[step_nb] = log_prob.to(self.training_device, non_blocking=True)
             self.memory.entropy += dist.entropy().mean()
 
             wandb.log(self.statistics.start_env_wait(), step=self.statistics.get_iteration())
@@ -113,9 +114,7 @@ class A2C(AbstractAgent):
         # we average entropy over numb of steps
         self.memory.entropy /= self.num_steps
 
-        loss = actor_loss + \
-               self.config['vf_coeff'] * critic_loss - \
-               self.config['entropy_coeff'] * self.memory.entropy
+        loss = actor_loss + self.config['vf_coeff'] * critic_loss - self.config['entropy_coeff'] * self.memory.entropy
 
         wandb.log({'total_loss': loss, 'actor_loss': actor_loss, 'critic_loss': critic_loss,
                    'entropy': self.memory.entropy, 'lr': self.scheduler.get_last_lr()[-1]},
