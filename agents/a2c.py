@@ -10,7 +10,7 @@ from gym.wrappers import Monitor
 from agents.abstract_agent import AbstractAgent
 from configs.a2c_default import default_a2c_config
 from utils.Memory import Memory
-from utils.Diverse import init_and_seed
+from utils.Diverse import init_and_seed, MockLRScheduler
 from utils.vec_env.util import create_subproc_env, make_env
 
 
@@ -52,7 +52,10 @@ class A2C(AbstractAgent):
             self.training_model = self.inference_model
         wandb.watch(self.training_model, log_freq=self.config['WandB_model_log_frequency'])
         self.optimizer = config['optimizer'](self.training_model.parameters(), lr=config['lr_initial'])
-        self.scheduler = config['lr_scheduler'](self.optimizer)
+        if config['lr_scheduler'] is not None:
+            self.scheduler = config['lr_scheduler'](self.optimizer)
+        else:
+            self.scheduler = MockLRScheduler(config['lr_initial'])
 
     def act(self):
         wandb.log(self.statistics.start_act(), step=self.statistics.get_iteration())

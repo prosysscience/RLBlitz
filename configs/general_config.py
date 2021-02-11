@@ -26,8 +26,11 @@ default_config = {
     'activation_fn': nn.ReLU(),
     'optimizer': optim.Adam,  # if you need more control, you can define a lambda
     'lr_initial': 1e-4,
-    # default scheduler is constant, x represent the optimizer
-    'lr_scheduler': lambda x: torch.optim.lr_scheduler.LambdaLR(x, lr_lambda=lambda epoch: 1.0),
+    # None means constant
+    # if you want to use Pytorch scheduler, you can! It's even recommended
+    # Example: 'lr_scheduler': lambda x: torch.optim.lr_scheduler.LambdaLR(x, lr_lambda=lambda epoch: 0.999**epoch),
+    # x represent the optimizer, keep this structure
+    'lr_scheduler': None,
     'clip_grad_norm': None,
     # devices
     'training_device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
