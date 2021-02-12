@@ -85,7 +85,9 @@ class PPO(A2C):
                 new_probabilities, new_values = self.training_model(self.memory.states[indices, :])
                 new_values = new_values.view(new_values.shape[0], new_values.shape[1])
                 if self.vf_clipping_param is not None:
-                    pass
+                    new_values = values[indices, :] + \
+                                 torch.clamp(new_values - values[indices, :],
+                                             -self.vf_clipping_param, self.vf_clipping_param)
                 dist = self.distribution(new_probabilities)
                 new_probabilities = dist.log_prob(self.memory.actions[indices, :])
                 entropy = dist.entropy().mean()

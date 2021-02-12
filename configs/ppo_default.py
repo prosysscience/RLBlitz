@@ -96,10 +96,10 @@ default_ppo_config = {
     'ppo_epochs': 30,
     'clipping_param': 0.3,
     'vf_clipping_param': 10.0,
-    'mini_batch_size': 128,
+    'mini_batch_size': 64,
     'min_reward': -10,
     'max_reward': 10,
-    'target_kl_div': 0.02,
+    'target_kl_div': 0.05,
 
     # ADVANCED CONFIG (don't touch if you don't know what you're doing)
     # VecEnv option, don't touch if not needed
