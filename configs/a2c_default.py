@@ -18,7 +18,7 @@ default_a2c_config = {
     'num_steps': 32,
     'gamma': 0.99,
     'seed': 0,
-    'num_worker': multiprocessing.cpu_count() * 4,
+    'num_worker': multiprocessing.cpu_count(),
 
     # NN CONFIG
     'optimizer': optim.Adam,  # if you need more control, you can define a lambda

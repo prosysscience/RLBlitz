@@ -16,10 +16,10 @@ default_ppo_config = {
 
     # ENV CONFIG
     'env_id': 'LunarLander-v2',
-    'num_steps': 32,
+    'num_steps': 64,
     'gamma': 0.99,
     'seed': 0,
-    'num_worker': multiprocessing.cpu_count() * 4,
+    'num_worker': multiprocessing.cpu_count(),
 
     # NN CONFIG
     'optimizer': optim.Adam,  # if you need more control, you can define a lambda
@@ -71,19 +71,19 @@ default_ppo_config = {
 
         # keep the lambda, it's important !
         'critic_layers': lambda input_size: nn.Sequential(
-            nn.Linear(input_size, 256),
+            nn.Linear(input_size, 128),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(128, 128),
             nn.ReLU(),
-            nn.Linear(256, 1),
+            nn.Linear(128, 1),
         ),
         # keep the lambda, it's important !
         'actor_layers': lambda input_size, output_size: nn.Sequential(
-            nn.Linear(input_size, 256),
+            nn.Linear(input_size, 64),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(64, 64),
             nn.ReLU(),
-            nn.Linear(256, output_size),
+            nn.Linear(64, output_size),
             nn.Softmax(dim=1)
         ),
     },
@@ -98,7 +98,7 @@ default_ppo_config = {
     'mini_batch_size': 128,
     'min_reward': -10,
     'max_reward': 10,
-    'target_kl_div': 0.01,
+    'target_kl_div': 0.02,
 
     # ADVANCED CONFIG (don't touch if you don't know what you're doing)
     # VecEnv option, don't touch if not needed
