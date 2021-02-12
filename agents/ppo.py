@@ -13,6 +13,7 @@ class PPO(A2C):
         self.clipping_param = config['clipping_param']
         self.mini_batch_size = config['mini_batch_size']
         self.target_kl_div = config['target_kl_div']
+        self.vf_clipping_param = config['vf_clipping_param']
 
     def act(self):
         wandb.log(self.statistics.start_act(), step=self.statistics.get_iteration())
@@ -57,8 +58,13 @@ class PPO(A2C):
     def update(self):
         wandb.log(self.statistics.start_update(), step=self.statistics.get_iteration())
         self.memory.rewards = torch.clamp(self.memory.rewards, self.config['min_reward'], self.config['max_reward'])
+        computed_return = self._compute_return(self.config['use_gae'])
         with torch.no_grad():
-            advantage = self._compute_advantage(self.config['use_gae'])
+            values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
+            if self.config['use_gae']:
+                advantage = computed_return - values[:-1]
+            else:
+                advantage = computed_return - values
         accumulated_kl_div = 0
         number_epoch_done = 0
         for epoch in range(self.ppo_epoch):
@@ -78,6 +84,8 @@ class PPO(A2C):
 
                 new_probabilities, new_values = self.training_model(self.memory.states[indices, :])
                 new_values = new_values.view(new_values.shape[0], new_values.shape[1])
+                if self.vf_clipping_param is not None:
+                    pass
                 dist = self.distribution(new_probabilities)
                 new_probabilities = dist.log_prob(self.memory.actions[indices, :])
                 entropy = dist.entropy().mean()
@@ -87,7 +95,7 @@ class PPO(A2C):
                 surr2 = torch.clamp(ratio, 1.0 - self.clipping_param, 1.0 + self.clipping_param) * mini_batch_advantage
 
                 actor_loss = -torch.min(surr1, surr2).mean()
-                critic_loss = (self.memory.rewards[indices, :] - new_values).pow(2).mean()
+                critic_loss = (computed_return[indices, :] - new_values).pow(2).mean()
 
                 loss = actor_loss + self.config['vf_coeff'] * critic_loss - self.config['entropy_coeff'] * entropy
                 loss.backward()

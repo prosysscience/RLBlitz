@@ -101,8 +101,12 @@ class A2C(AbstractAgent):
         wandb.log(self.statistics.start_update(), step=self.statistics.get_iteration())
         self.optimizer.zero_grad(set_to_none=True)
 
-        advantage = self._compute_advantage(self.config['use_gae'])
-
+        computed_return = self._compute_return(self.config['use_gae'])
+        values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
+        if self.config['use_gae']:
+            advantage = computed_return - values[:-1]
+        else:
+            advantage = computed_return - values
         critic_loss = advantage.pow(2).mean()
 
         if self.config['normalize_advantage']:
@@ -129,13 +133,13 @@ class A2C(AbstractAgent):
         self.inference_model.load_state_dict(self.training_model.state_dict())
         wandb.log(self.statistics.end_update(), step=self.statistics.get_iteration_nb())
 
-    def _compute_advantage(self, use_gae=True):
-        if use_gae:
-            with torch.no_grad():
-                self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
-                returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float,
-                                      device=self.training_device)
-                not_terminal = torch.logical_not(self.memory.is_terminals)
+    def _compute_return(self, use_gae=True):
+        with torch.no_grad():
+            self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
+            returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float,
+                                  device=self.training_device)
+            not_terminal = torch.logical_not(self.memory.is_terminals)
+            if use_gae:
                 self.memory.values[self.num_steps] = self.training_model.critic_only(self.states_tensor)
                 values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
                 gae = 0
@@ -145,24 +149,14 @@ class A2C(AbstractAgent):
                     gae = delta + self.gamma * self.lambda_gae * non_terminal * gae
                     returns[index] = gae
                     index -= 1
-            # view is better than squeeze because it avoid copy
-            advantage = returns - values[:-1]
-        else:
-            with torch.no_grad():
-                self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
-                returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float,
-                                      device=self.training_device)
-                not_terminal = torch.logical_not(self.memory.is_terminals)
+            else:
                 return_value = self.training_model.critic_only(self.states_tensor).view(-1)
                 index = len(self.memory) - 1
                 for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
                     return_value = reward + (non_terminal * self.gamma * return_value)
                     returns[index] = return_value
                     index -= 1
-            # view is better than squeeze because it avoid copy
-            values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
-            advantage = returns - values
-        return advantage
+        return returns
 
     def train(self):
         wandb.log(self.statistics.start_train(), step=self.statistics.get_iteration())

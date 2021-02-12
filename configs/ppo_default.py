@@ -95,6 +95,7 @@ default_ppo_config = {
     # PPO Specific config
     'ppo_epochs': 30,
     'clipping_param': 0.3,
+    'vf_clipping_param': 10.0,
     'mini_batch_size': 128,
     'min_reward': -10,
     'max_reward': 10,
