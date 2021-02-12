@@ -58,6 +58,7 @@ default_ppo_config = {
     'lambda_gae': 0.98,
     # only valuable with large batches
     'normalize_advantage': True,
+    'policy_coeff': 1.0,
     'vf_coeff': 1.0,
     'entropy_coeff': 1e-4,
     # neural network

@@ -62,6 +62,7 @@ default_a2c_config = {
     'lambda_gae': 0.95,
     # only valuable with large batches
     'normalize_advantage': False,
+    'policy_coeff': 1.0,
     'vf_coeff': 1.0,
     'entropy_coeff': 1e-3,
     # neural network

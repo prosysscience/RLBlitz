@@ -1,8 +1,6 @@
 import time
 import numpy as np
 
-from utils.RunningMetrics import RunningMetrics
-
 
 class Statistics:
 
@@ -33,9 +31,9 @@ class Statistics:
         return {}
 
     def episode_done(self, worker_id):
-        result = {'episode_return': self.episode_return[worker_id],
-                  'episode_len': self.episode_len[worker_id],
-                  'episode_number': self.episode_number}
+        result = {'Environment/episode_return': self.episode_return[worker_id],
+                  'Environment/episode_len': self.episode_len[worker_id],
+                  'Environment/episode_number': self.episode_number}
         self.episode_return[worker_id] = 0
         self.episode_len[worker_id] = 0
         self.episode_number += 1
@@ -55,21 +53,21 @@ class Statistics:
 
     def end_step(self):
         self.total_step += self.num_worker
-        return {'step_time': time.time() - self.time_start_step}
+        return {'Timers/step_time': time.time() - self.time_start_step}
 
     def start_act(self):
         self.time_start_act = time.time()
         return {}
 
     def end_act(self):
-        return {'acting_time': time.time() - self.time_start_act}
+        return {'Timers/acting_time': time.time() - self.time_start_act}
 
     def start_update(self):
         self.time_start_update = time.time()
         return {}
 
     def end_update(self):
-        return {'training_time': time.time() - self.time_start_update}
+        return {'Timers/training_time': time.time() - self.time_start_update}
 
     def start_train(self):
         self.time_start_train = time.time()
@@ -79,21 +77,21 @@ class Statistics:
         episodes_done = self.episode_this_iter
         self.iteration += 1
         self.episode_this_iter = 0
-        return {'iteration': self.iteration,
-                'episodes_this_iter': episodes_done,
-                'total_steps': self.total_step,
-                'iteration_time': time.time() - self.time_start_train}
+        return {'Algorithm/iteration': self.iteration,
+                'Algorithm/episodes_this_iter': episodes_done,
+                'Environment/total_steps': self.total_step,
+                'Timers/iteration_time': time.time() - self.time_start_train}
 
     def start_inference(self):
         self.time_start_inference = time.time()
         return {}
 
     def end_inference(self):
-        return {'inference_time': time.time() - self.time_start_inference}
+        return {'Timers/inference_time': time.time() - self.time_start_inference}
 
     def start_env_wait(self):
         self.time_env_wait = time.time()
         return {}
 
     def end_env_wait(self):
-        return {'env_wait_time': time.time() - self.time_env_wait}
+        return {'Timers/env_wait_time': time.time() - self.time_env_wait}

@@ -67,6 +67,7 @@ class PPO(A2C):
                 advantage = computed_return - values
         accumulated_kl_div = 0
         number_epoch_done = 0
+        total_entropy = 0
         for epoch in range(self.ppo_epoch):
             accumulated_epoch_kl_div = 0
             nb_mini_batches_done = 0
@@ -91,6 +92,7 @@ class PPO(A2C):
                 dist = self.distribution(new_probabilities)
                 new_probabilities = dist.log_prob(self.memory.actions[indices, :])
                 entropy = dist.entropy().mean()
+                total_entropy += entropy
 
                 ratio = (new_probabilities - self.memory.logprobs[indices, :]).exp()
                 surr1 = ratio * mini_batch_advantage
@@ -108,11 +110,17 @@ class PPO(A2C):
                     mini_batch_kl = torch.mean(self.memory.logprobs[indices, :] - new_probabilities).cpu()
                     accumulated_epoch_kl_div += mini_batch_kl
                 nb_mini_batches_done += 1
+                wandb.log({'Algorithm/total_loss': loss, 'Algorithm/actor_loss': actor_loss,
+                           'Algorithm/critic_loss': critic_loss},
+                          step=self.statistics.get_iteration_nb())
             number_epoch_done += 1
             accumulated_kl_div += (accumulated_epoch_kl_div / nb_mini_batches_done)
             if self.target_kl_div is not None and (accumulated_kl_div / (number_epoch_done + 1)) > 1.5 * self.target_kl_div:
                 break
-        wandb.log({'kl_div_iter': accumulated_kl_div / number_epoch_done, 'epoch_this_iter': number_epoch_done}, step=self.statistics.get_iteration())
+        wandb.log({'Statistics/kl_divergence': accumulated_kl_div / number_epoch_done,
+                   'Statistics/entropy': total_entropy / number_epoch_done,
+                   'Algorithm/LR': self.scheduler.get_last_lr()[-1],
+                   'Algorithm/epoch_this_iter': number_epoch_done}, step=self.statistics.get_iteration())
         self.scheduler.step()
         self.states_tensor = self.states_tensor.to(self.inference_device, non_blocking=True)
         self.inference_model.load_state_dict(self.training_model.state_dict())

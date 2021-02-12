@@ -33,6 +33,9 @@ class A2C(AbstractAgent):
         self.state_dim = self.env_info.observation_space.shape[0]
         self.action_dim = self.env_info.action_space.n
         self.lr = config['lr_initial']
+        self.policy_coeff = config['policy_coeff']
+        self.vf_coeff = config['vf_coeff']
+        self.entropy_coeff = config['entropy_coeff']
 
         self.distribution = config['distribution']
 
@@ -118,10 +121,13 @@ class A2C(AbstractAgent):
         # we average entropy over numb of steps
         self.memory.entropy /= self.num_steps
 
-        loss = actor_loss + self.config['vf_coeff'] * critic_loss - self.config['entropy_coeff'] * self.memory.entropy
+        loss = self.policy_coeff * actor_loss + self.vf_coeff * critic_loss - self.entropy_coeff * self.memory.entropy
 
-        wandb.log({'total_loss': loss, 'actor_loss': actor_loss, 'critic_loss': critic_loss,
-                   'entropy': self.memory.entropy, 'lr': self.scheduler.get_last_lr()[-1]},
+        wandb.log({'Algorithm/total_loss': loss,
+                   'Algorithm/actor_loss': actor_loss,
+                   'Algorithm/critic_loss': critic_loss,
+                   'Statistics/entropy': self.memory.entropy,
+                   'Algorithm/LR': self.scheduler.get_last_lr()[-1]},
                   step=self.statistics.get_iteration_nb())
 
         loss.backward()
