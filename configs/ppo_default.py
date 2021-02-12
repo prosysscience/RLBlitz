@@ -79,18 +79,16 @@ default_ppo_config = {
         ),
         # keep the lambda, it's important !
         'actor_layers': lambda input_size, output_size: nn.Sequential(
-            nn.Linear(input_size, 64),
+            nn.Linear(input_size, 128),
             nn.ReLU(),
-            nn.Linear(64, 64),
+            nn.Linear(128, 128),
             nn.ReLU(),
-            nn.Linear(64, output_size),
+            nn.Linear(128, output_size),
             nn.Softmax(dim=1)
         ),
     },
-    'critic_layers_initialization': lambda x: init_weights(x,
-                                                           function_output=lambda x: default_actor_critic(x, gain=1.00)),
-    'actor_layers_initialization': lambda x: init_weights(x,
-                                                           function_output=lambda x: default_actor_critic(x, gain=0.01)),
+    'critic_layers_initialization': lambda x: init_weights(x, function_output=lambda layer: default_actor_critic(layer, gain=1.00)),
+    'actor_layers_initialization': lambda x: init_weights(x, function_output=lambda layer: default_actor_critic(layer, gain=0.01)),
 
     # PPO Specific config
     'ppo_epochs': 30,
@@ -99,7 +97,7 @@ default_ppo_config = {
     'mini_batch_size': 64,
     'min_reward': -10,
     'max_reward': 10,
-    'target_kl_div': 0.05,
+    'target_kl_div': 0.01,
 
     # ADVANCED CONFIG (don't touch if you don't know what you're doing)
     # VecEnv option, don't touch if not needed
