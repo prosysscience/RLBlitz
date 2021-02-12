@@ -42,12 +42,12 @@ class MockLRScheduler:
         return [self.lr]
 
 
-def default_actor_critic(x, mean=0., std=0.1):
-    return nn.init.normal_(x, mean=mean, std=std)
+def default_actor_critic(x, gain=np.sqrt(2)):
+    return nn.init.orthogonal_(x, gain=gain)
 
 
-def init_weights(m, function_hidden=default_actor_critic, bias_hidden=0.1,
-                 function_output=lambda x: default_actor_critic, bias_output=0.1):
+def init_weights(m, function_hidden=default_actor_critic, bias_hidden=0.0,
+                 function_output=default_actor_critic, bias_output=0.1):
     linear_layers = [module for module in m.modules() if isinstance(module, nn.Linear)]
     for layers in linear_layers[:-1]:
         function_hidden(layers.weight)

@@ -86,8 +86,12 @@ default_a2c_config = {
             nn.Softmax(dim=1)
         ),
     },
-    'critic_layers_initialization': lambda x: init_weights(x, function_output=lambda x: default_actor_critic(x, std=1.0)),
-    'actor_layers_initialization': init_weights,
+
+    'critic_layers_initialization': lambda x: init_weights(x,
+                                                           function_output=lambda x: default_actor_critic(x, gain=1.00)),
+    'actor_layers_initialization': lambda x: init_weights(x,
+                                                           function_output=lambda x: default_actor_critic(x, gain=0.01)),
+
 
     # ADVANCED CONFIG (don't touch if you don't know what you're doing)
     # VecEnv option, don't touch if not needed

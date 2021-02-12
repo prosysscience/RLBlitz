@@ -23,7 +23,7 @@ default_ppo_config = {
 
     # NN CONFIG
     'optimizer': optim.Adam,  # if you need more control, you can define a lambda
-    'lr_initial': 1e-4,
+    'lr_initial': 5e-5,
     # None means constant
     # if you want to use Pytorch scheduler, you can! It's even recommended
     # Example: 'lr_scheduler': lambda x: torch.optim.lr_scheduler.LambdaLR(x, lr_lambda=lambda epoch: 0.999**epoch),
@@ -49,17 +49,17 @@ default_ppo_config = {
     'WandB_notes': None,
     # define the frequency WandB logs gradients from model
     # don't set too low or you will reach the api limits
-    'WandB_model_log_frequency': 100,
+    'WandB_model_log_frequency': 300,
 
     # Actor Critic specific config
     'distribution': Categorical,
     # Lamdba-GAE: https://arxiv.org/abs/1506.02438
     'use_gae': True,
-    'lambda_gae': 0.95,
+    'lambda_gae': 0.98,
     # only valuable with large batches
     'normalize_advantage': True,
     'vf_coeff': 1.0,
-    'entropy_coeff': 1e-3,
+    'entropy_coeff': 1e-4,
     # neural network
     # define the template needs to inherit from AbstractActorCritic
     # can be change if you need very specific behavior
@@ -88,16 +88,17 @@ default_ppo_config = {
         ),
     },
     'critic_layers_initialization': lambda x: init_weights(x,
-                                                           function_output=lambda x: default_actor_critic(x, std=1.0)),
-    'actor_layers_initialization': init_weights,
+                                                           function_output=lambda x: default_actor_critic(x, gain=1.00)),
+    'actor_layers_initialization': lambda x: init_weights(x,
+                                                           function_output=lambda x: default_actor_critic(x, gain=0.01)),
 
     # PPO Specific config
-    'ppo_epochs': 10,
-    'clipping_param': 0.2,
-    'mini_batch_size': 32,
+    'ppo_epochs': 30,
+    'clipping_param': 0.3,
+    'mini_batch_size': 128,
     'min_reward': -10,
     'max_reward': 10,
-    'target_kl_div': None,
+    'target_kl_div': 0.01,
 
     # ADVANCED CONFIG (don't touch if you don't know what you're doing)
     # VecEnv option, don't touch if not needed
