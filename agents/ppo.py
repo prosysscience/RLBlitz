@@ -12,7 +12,7 @@ class PPO(A2C):
         self.ppo_epoch = config['ppo_epochs']
         self.clipping_param = config['clipping_param']
         self.mini_batch_size = config['mini_batch_size']
-        self.max_kl_div = config['max_kl_div']
+        self.target_kl_div = config['target_kl_div']
 
     def act(self):
         wandb.log(self.statistics.start_act(), step=self.statistics.get_iteration())
@@ -20,7 +20,8 @@ class PPO(A2C):
         for step_nb in range(self.num_steps):
             wandb.log(self.statistics.start_step(), step=self.statistics.get_iteration())
             wandb.log(self.statistics.start_inference(), step=self.statistics.get_iteration())
-            probabilities, values = self.inference_model(self.states_tensor)
+            with torch.no_grad():
+                probabilities, values = self.inference_model(self.states_tensor)
             wandb.log(self.statistics.end_inference(), step=self.statistics.get_iteration())
             dist = self.distribution(probabilities)
             actions = dist.sample()
@@ -58,8 +59,7 @@ class PPO(A2C):
         self.memory.rewards = torch.clamp(self.memory.rewards, self.config['min_reward'], self.config['max_reward'])
         with torch.no_grad():
             advantage = self._compute_advantage(self.config['use_gae'])
-            if self.config['normalize_advantage']:
-                advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+        accumulated_kl_div = 0
         for epoch in range(self.ppo_epoch):
             with torch.no_grad():
                 permutation = torch.randperm(self.memory.states.size(0) - 1)
@@ -68,15 +68,19 @@ class PPO(A2C):
 
                 indices = permutation[i: i + self.mini_batch_size]
 
+                mini_batch_advantage = advantage[indices, :]
+                if self.config['normalize_advantage']:
+                    mini_batch_advantage = (mini_batch_advantage - mini_batch_advantage.mean()) / (mini_batch_advantage.std() + 1e-8)
+
                 new_probabilities, new_values = self.training_model(self.memory.states[indices, :])
                 new_values = new_values.view(new_values.shape[0], new_values.shape[1])
                 dist = self.distribution(new_probabilities)
                 new_probabilities = dist.log_prob(self.memory.actions[indices, :])
                 entropy = dist.entropy().mean()
 
-                ratio = (new_probabilities - self.memory.logprobs[indices, :].detach()).exp()
-                surr1 = ratio * advantage[indices, :]
-                surr2 = torch.clamp(ratio, 1.0 - self.clipping_param, 1.0 + self.clipping_param) * advantage[indices, :]
+                ratio = (new_probabilities - self.memory.logprobs[indices, :]).exp()
+                surr1 = ratio * mini_batch_advantage
+                surr2 = torch.clamp(ratio, 1.0 - self.clipping_param, 1.0 + self.clipping_param) * mini_batch_advantage
 
                 actor_loss = -torch.min(surr1, surr2).mean()
                 critic_loss = (self.memory.rewards[indices, :] - new_values).pow(2).mean()
@@ -86,6 +90,12 @@ class PPO(A2C):
                 if self.config['clip_grad_norm'] is not None:
                     torch.nn.utils.clip_grad_norm_(self.training_model.parameters(), self.config['clip_grad_norm'])
                 self.optimizer.step()
+                with torch.no_grad():
+                    epoch_kl = torch.mean(self.memory.logprobs[indices, :] - new_probabilities).cpu()
+                    accumulated_kl_div += epoch_kl
+                if self.target_kl_div is not None and (accumulated_kl_div / (epoch + 1) > 1.5) * self.target_kl_div:
+                    break
+        wandb.log({'kl_div_iter': accumulated_kl_div / self.ppo_epoch}, step=self.statistics.get_iteration())
         self.scheduler.step()
         self.states_tensor = self.states_tensor.to(self.inference_device, non_blocking=True)
         self.inference_model.load_state_dict(self.training_model.state_dict())

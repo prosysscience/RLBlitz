@@ -57,7 +57,7 @@ default_ppo_config = {
     'use_gae': True,
     'lambda_gae': 0.95,
     # only valuable with large batches
-    'normalize_advantage': False,
+    'normalize_advantage': True,
     'vf_coeff': 1.0,
     'entropy_coeff': 1e-3,
     # neural network
@@ -97,7 +97,7 @@ default_ppo_config = {
     'mini_batch_size': 32,
     'min_reward': -10,
     'max_reward': 10,
-    'max_kl_div': None,
+    'target_kl_div': None,
 
     # ADVANCED CONFIG (don't touch if you don't know what you're doing)
     # VecEnv option, don't touch if not needed
