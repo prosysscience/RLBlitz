@@ -9,18 +9,19 @@ from utils.Diverse import init_weights, default_actor_critic
 from utils.Statistics import Statistics
 
 default_a2c_config = {
-    #
-    # BASIC CONFIG
-    #
 
+    #
     # ENV CONFIG
+    #
     'env_id': 'LunarLander-v2',
     'num_steps': 32,
     'gamma': 0.99,
     'seed': 0,
     'num_worker': multiprocessing.cpu_count(),
 
+    #
     # NN CONFIG
+    #
     'optimizer': optim.Adam,  # if you need more control, you can define a lambda
     'lr_initial': 1e-4,
     # None means constant
@@ -34,7 +35,9 @@ default_a2c_config = {
     # the device uses by the worker to compute actions they will perform
     'inference_device': torch.device('cpu'),
 
+    #
     # STATISTICS CONFIG
+    #
     # for more control about how to handle the stats, modify this
     'statistics': Statistics,
     # for smoothing you need to use SmoothedStatistics, otherwise you can use Statistics
@@ -50,7 +53,9 @@ default_a2c_config = {
     # don't set too low or you will reach the api limits
     'WandB_model_log_frequency': 100,
 
-    # Actor Critic specific config
+    #
+    # ACTOR CRITIC specific config
+    #
     'distribution': Categorical,
     # Lamdba-GAE: https://arxiv.org/abs/1506.02438
     'use_gae': True,
@@ -92,8 +97,9 @@ default_a2c_config = {
     'actor_layers_initialization': lambda x: init_weights(x,
                                                            function_output=lambda x: default_actor_critic(x, gain=0.01)),
 
-
+    #
     # ADVANCED CONFIG (don't touch if you don't know what you're doing)
+    #
     # VecEnv option, don't touch if not needed
     # see the doc for more info: https://github.com/openai/gym/blob/master/gym/vector/async_vector_env.py#L25
     'env_copy': False,

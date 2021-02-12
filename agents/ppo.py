@@ -10,7 +10,7 @@ class PPO(A2C):
     def __init__(self, config=default_ppo_config):
         super().__init__(config)
         self.ppo_epoch = config['ppo_epochs']
-        self.clipping_param = config['clipping_param']
+        self.policy_clipping_param = config['policy_clipping_param']
         self.mini_batch_size = config['mini_batch_size']
         self.target_kl_div = config['target_kl_div']
         self.vf_clipping_param = config['vf_clipping_param']
@@ -94,7 +94,7 @@ class PPO(A2C):
 
                 ratio = (new_probabilities - self.memory.logprobs[indices, :]).exp()
                 surr1 = ratio * mini_batch_advantage
-                surr2 = torch.clamp(ratio, 1.0 - self.clipping_param, 1.0 + self.clipping_param) * mini_batch_advantage
+                surr2 = torch.clamp(ratio, 1.0 - self.policy_clipping_param, 1.0 + self.policy_clipping_param) * mini_batch_advantage
 
                 actor_loss = -torch.min(surr1, surr2).mean()
                 critic_loss = (computed_return[indices, :] - new_values).pow(2).mean()
