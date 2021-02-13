@@ -8,7 +8,7 @@ import torch
 from agents.abstract_agent import AbstractAgent
 from configs.a2c_default import default_a2c_config
 from utils.Memory import Memory
-from utils.Diverse import init_and_seed, MockLRScheduler
+from utils.Diverse import init_and_seed, MockLRScheduler, parse_scheduler
 from utils.vec_env.util import create_subproc_env
 
 
@@ -27,19 +27,19 @@ class A2C(AbstractAgent):
         self.inference_device = config['inference_device']
         self.num_worker = config['num_worker']
         self.num_steps = config['num_steps']
-        self.gamma = config['gamma']
-        self.lambda_gae = config['lambda_gae']
+        self.gamma = parse_scheduler(config['gamma'])
+        self.lambda_gae = parse_scheduler(config['lambda_gae'])
         self.statistics = config['statistics'](self.config)
         self.state_dim = self.env_info.observation_space.shape[0]
         self.action_dim = self.env_info.action_space.n
         self.lr = config['lr_initial']
-        self.policy_coeff = config['policy_coeff']
-        self.vf_coeff = config['vf_coeff']
-        self.entropy_coeff = config['entropy_coeff']
+        self.policy_coeff = parse_scheduler(config['policy_coeff'])
+        self.vf_coeff = parse_scheduler(config['vf_coeff'])
+        self.entropy_coeff = parse_scheduler(config['entropy_coeff'])
 
         self.distribution = config['distribution']
 
-        self.clip_grad_norm = self.config['clip_grad_norm']
+        self.clip_grad_norm = parse_scheduler(self.config['clip_grad_norm'])
 
         self.states = self.envs.reset()
         self.states_tensor = torch.from_numpy(self.states).to(self.inference_device, non_blocking=True)
@@ -123,7 +123,7 @@ class A2C(AbstractAgent):
         # we average entropy over numb of steps
         self.memory.entropy /= self.num_steps
 
-        loss = self.policy_coeff * actor_loss + self.vf_coeff * critic_loss - self.entropy_coeff * self.memory.entropy
+        loss = self.policy_coeff.get_current_value() * actor_loss + self.vf_coeff.get_current_value() * critic_loss - self.entropy_coeff.get_current_value() * self.memory.entropy
 
         wandb.log({'Algorithm/total_loss': loss,
                    'Algorithm/actor_loss': actor_loss,
@@ -134,7 +134,7 @@ class A2C(AbstractAgent):
 
         loss.backward()
         if self.clip_grad_norm is not None:
-            torch.nn.utils.clip_grad_norm_(self.training_model.parameters(), self.clip_grad_norm)
+            torch.nn.utils.clip_grad_norm_(self.training_model.parameters(), self.clip_grad_norm.get_current_value())
         self.optimizer.step()
         self.scheduler.step()
         self.states_tensor = self.states_tensor.to(self.inference_device, non_blocking=True)
@@ -153,15 +153,15 @@ class A2C(AbstractAgent):
                 gae = 0
                 index = len(self.memory) - 1
                 for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
-                    delta = reward + ((non_terminal * self.gamma * values[index + 1]) - values[index])
-                    gae = delta + self.gamma * self.lambda_gae * non_terminal * gae
+                    delta = reward + ((non_terminal * self.gamma.get_current_value() * values[index + 1]) - values[index])
+                    gae = delta + self.gamma .get_current_value() * self.lambda_gae.get_current_value() * non_terminal * gae
                     returns[index] = gae
                     index -= 1
             else:
                 return_value = self.training_model.critic_only(self.states_tensor).view(-1)
                 index = len(self.memory) - 1
                 for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
-                    return_value = reward + (non_terminal * self.gamma * return_value)
+                    return_value = reward + (non_terminal * self.gamma .get_current_value() * return_value)
                     returns[index] = return_value
                     index -= 1
         return returns

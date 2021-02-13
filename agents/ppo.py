@@ -3,17 +3,18 @@ import wandb
 
 from agents.a2c import A2C
 from configs.ppo_default import default_ppo_config
+from utils.Diverse import parse_scheduler
 
 
 class PPO(A2C):
 
     def __init__(self, config=default_ppo_config):
         super().__init__(config)
-        self.ppo_epoch = config['ppo_epochs']
-        self.policy_clipping_param = config['policy_clipping_param']
-        self.mini_batch_size = config['mini_batch_size']
-        self.target_kl_div = config['target_kl_div']
-        self.vf_clipping_param = config['vf_clipping_param']
+        self.ppo_epoch = parse_scheduler(config['ppo_epochs'])
+        self.policy_clipping_param = parse_scheduler(config['policy_clipping_param'])
+        self.mini_batch_size = parse_scheduler(config['mini_batch_size'])
+        self.target_kl_div = parse_scheduler(config['target_kl_div'])
+        self.vf_clipping_param = parse_scheduler(config['vf_clipping_param'])
 
     def act(self):
         wandb.log(self.statistics.start_act(), step=self.statistics.get_iteration())
@@ -68,15 +69,15 @@ class PPO(A2C):
         accumulated_kl_div = 0
         number_epoch_done = 0
         total_entropy = 0
-        for epoch in range(self.ppo_epoch):
+        for epoch in range(self.ppo_epoch.get_current_value()):
             accumulated_epoch_kl_div = 0
             nb_mini_batches_done = 0
             with torch.no_grad():
                 permutation = torch.randperm(self.memory.states.size(0) - 1)
-            for i in range(0, self.memory.states.size(0) - 1, self.mini_batch_size):
+            for i in range(0, self.memory.states.size(0) - 1, self.mini_batch_size.get_current_value()):
                 self.optimizer.zero_grad(set_to_none=True)
 
-                indices = permutation[i: i + self.mini_batch_size]
+                indices = permutation[i: i + self.mini_batch_size.get_current_value()]
 
                 mini_batch_advantage = advantage[indices, :]
                 if self.config['normalize_advantage']:
@@ -88,7 +89,7 @@ class PPO(A2C):
                 if self.vf_clipping_param is not None:
                     new_values = values[indices, :] + \
                                  torch.clamp(new_values - values[indices, :],
-                                             -self.vf_clipping_param, self.vf_clipping_param)
+                                             -self.vf_clipping_param.get_current_value(), self.vf_clipping_param.get_current_value())
                 dist = self.distribution(new_probabilities)
                 new_probabilities = dist.log_prob(self.memory.actions[indices, :])
                 entropy = dist.entropy().mean()
@@ -96,15 +97,15 @@ class PPO(A2C):
 
                 ratio = (new_probabilities - self.memory.logprobs[indices, :]).exp()
                 surr1 = ratio * mini_batch_advantage
-                surr2 = torch.clamp(ratio, 1.0 - self.policy_clipping_param, 1.0 + self.policy_clipping_param) * mini_batch_advantage
+                surr2 = torch.clamp(ratio, 1.0 - self.policy_clipping_param.get_current_value(), 1.0 + self.policy_clipping_param.get_current_value()) * mini_batch_advantage
 
                 actor_loss = -torch.min(surr1, surr2).mean()
                 critic_loss = (computed_return[indices, :] - new_values).pow(2).mean()
 
-                loss = self.policy_coeff * actor_loss + self.vf_coeff * critic_loss - self.entropy_coeff * entropy
+                loss = self.policy_coeff.get_current_value() * actor_loss + self.vf_coeff.get_current_value() * critic_loss - self.entropy_coeff.get_current_value() * entropy
                 loss.backward()
                 if self.clip_grad_norm is not None:
-                    torch.nn.utils.clip_grad_norm_(self.training_model.parameters(), self.clip_grad_norm)
+                    torch.nn.utils.clip_grad_norm_(self.training_model.parameters(), self.clip_grad_norm.get_current_value())
                 self.optimizer.step()
                 with torch.no_grad():
                     mini_batch_kl = torch.mean(self.memory.logprobs[indices, :] - new_probabilities).cpu()
@@ -115,7 +116,7 @@ class PPO(A2C):
                           step=self.statistics.get_iteration_nb())
             number_epoch_done += 1
             accumulated_kl_div += (accumulated_epoch_kl_div / nb_mini_batches_done)
-            if self.target_kl_div is not None and (accumulated_kl_div / (number_epoch_done + 1)) > 1.5 * self.target_kl_div:
+            if self.target_kl_div is not None and (accumulated_kl_div / (number_epoch_done + 1)) > 1.5 * self.target_kl_div.get_current_value():
                 break
         wandb.log({'Statistics/kl_divergence': accumulated_kl_div / number_epoch_done,
                    'Statistics/entropy': total_entropy / number_epoch_done,

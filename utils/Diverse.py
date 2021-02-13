@@ -5,6 +5,9 @@ import torch
 import numpy as np
 from torch import nn
 
+from utils import ParameterScheduler
+from utils.ParameterScheduler import ConstantScheduler
+
 
 def init_and_seed(config):
     os.environ['PYTHONHASHSEED'] = str(config['seed'])
@@ -54,3 +57,19 @@ def init_weights(m, function_hidden=default_actor_critic, bias_hidden=0.0,
         nn.init.constant_(layers.bias, bias_hidden)
     function_output(linear_layers[-1].weight)
     nn.init.constant_(linear_layers[-1].bias, bias_output)
+
+
+def set_attr(obj, attr_dict):
+    for attr, val in attr_dict.items():
+        setattr(obj, attr, val)
+    return obj
+
+
+def parse_scheduler(spec):
+    if not isinstance(spec, dict):
+        return ConstantScheduler(spec)
+    scheduler = getattr(ParameterScheduler, spec['scheduler_name'])
+    set_attr(scheduler, dict(
+        start_val=np.nan,
+    ))
+    set_attr(scheduler, spec)
