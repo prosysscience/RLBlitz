@@ -101,10 +101,10 @@ class PPO(A2C):
                 actor_loss = -torch.min(surr1, surr2).mean()
                 critic_loss = (computed_return[indices, :] - new_values).pow(2).mean()
 
-                loss = actor_loss + self.config['vf_coeff'] * critic_loss - self.config['entropy_coeff'] * entropy
+                loss = self.policy_coeff * actor_loss + self.vf_coeff * critic_loss - self.entropy_coeff * entropy
                 loss.backward()
-                if self.config['clip_grad_norm'] is not None:
-                    torch.nn.utils.clip_grad_norm_(self.training_model.parameters(), self.config['clip_grad_norm'])
+                if self.clip_grad_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(self.training_model.parameters(), self.clip_grad_norm)
                 self.optimizer.step()
                 with torch.no_grad():
                     mini_batch_kl = torch.mean(self.memory.logprobs[indices, :] - new_probabilities).cpu()

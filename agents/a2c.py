@@ -39,6 +39,8 @@ class A2C(AbstractAgent):
 
         self.distribution = config['distribution']
 
+        self.clip_grad_norm = self.config['clip_grad_norm']
+
         self.states = self.envs.reset()
         self.states_tensor = torch.from_numpy(self.states).to(self.inference_device, non_blocking=True)
         self.memory = Memory(config, self.state_dim, self.training_device, self.config['use_gae'])
@@ -131,8 +133,8 @@ class A2C(AbstractAgent):
                   step=self.statistics.get_iteration_nb())
 
         loss.backward()
-        if self.config['clip_grad_norm'] is not None:
-            torch.nn.utils.clip_grad_norm_(self.training_model.parameters(), self.config['clip_grad_norm'])
+        if self.clip_grad_norm is not None:
+            torch.nn.utils.clip_grad_norm_(self.training_model.parameters(), self.clip_grad_norm)
         self.optimizer.step()
         self.scheduler.step()
         self.states_tensor = self.states_tensor.to(self.inference_device, non_blocking=True)
