@@ -16,6 +16,7 @@ default_ppo_config = {
 
     # ENV CONFIG
     'env_id': 'LunarLander-v2',
+    'env_config': {},
     'num_steps': 64,
     'gamma': 0.99,
     'seed': 0,

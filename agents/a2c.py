@@ -21,7 +21,7 @@ class A2C(AbstractAgent):
                    tags=config['WandB_tags'], notes=config['WandB_notes'])
         init_and_seed(config)
         self.config = config
-        self.envs, self.env_info = create_subproc_env(config['env_id'], config['seed'], config['num_worker'],
+        self.envs, self.env_info = create_subproc_env(config['env_id'], config['env_config'], config['seed'], config['num_worker'],
                                                       config['shared_memory'], config['env_copy'], False)
         self.training_device = config['training_device']
         self.inference_device = config['inference_device']

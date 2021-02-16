@@ -14,6 +14,7 @@ default_a2c_config = {
     # ENV CONFIG
     #
     'env_id': 'LunarLander-v2',
+    'env_config': {},
     'num_steps': 32,
     'gamma': 0.99,
     'seed': 0,
