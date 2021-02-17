@@ -105,6 +105,7 @@ class A2C(AbstractAgent):
                     wandb.log(self.statistics.episode_done(worker_id), step=self.statistics.get_iteration())
             wandb.log(self.statistics.end_step(), step=self.statistics.get_iteration())
         self.increment_scheduler(self.statistics.get_episodes_this_iter(), criteria='episode')
+        self.increment_scheduler(self.num_steps * self.num_worker, criteria='timestep')
         wandb.log(self.statistics.end_act(), step=self.statistics.get_iteration())
 
     def update(self):

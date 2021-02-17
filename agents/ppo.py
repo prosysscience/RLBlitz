@@ -54,6 +54,8 @@ class PPO(A2C):
                 if done:
                     wandb.log(self.statistics.episode_done(worker_id), step=self.statistics.get_iteration())
             wandb.log(self.statistics.end_step(), step=self.statistics.get_iteration())
+        self.increment_scheduler(self.statistics.get_episodes_this_iter(), criteria='episode')
+        self.increment_scheduler(self.num_steps * self.num_worker, criteria='timestep')
         wandb.log(self.statistics.end_act(), step=self.statistics.get_iteration())
 
     def update(self):
@@ -120,9 +122,8 @@ class PPO(A2C):
                 break
         wandb.log({'Statistics/kl_divergence': accumulated_kl_div / number_epoch_done,
                    'Statistics/entropy': total_entropy / number_epoch_done,
-                   'Algorithm/LR': self.scheduler.get_last_lr()[-1],
+                   'Algorithm/LR': self.lr.get_current_value(),
                    'Algorithm/epoch_this_iter': number_epoch_done}, step=self.statistics.get_iteration())
-        self.scheduler.step()
         self.states_tensor = self.states_tensor.to(self.inference_device, non_blocking=True)
         self.inference_model.load_state_dict(self.training_model.state_dict())
         wandb.log(self.statistics.end_update(), step=self.statistics.get_iteration_nb())

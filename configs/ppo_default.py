@@ -39,6 +39,7 @@ default_ppo_config = {
     # STATISTICS CONFIG
     # for more control about how to handle the stats, modify this
     'statistics': Statistics,
+    'parameter_scheduler_criteria': 'episode',  # can also use 'timestep' or 'train_iter'
     # WandB init configs: https://docs.wandb.ai/ref/init
     'WandB_project': None,
     'WandB_entity': None,
