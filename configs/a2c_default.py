@@ -41,6 +41,7 @@ default_a2c_config = {
     #
     # for more control about how to handle the stats, modify this
     'statistics': Statistics,
+    'parameter_scheduler_criteria': 'episode',  # can also use 'timestep' or 'train_iter'
     # WandB init configs: https://docs.wandb.ai/ref/init
     'WandB_project': None,
     'WandB_entity': None,
@@ -93,9 +94,10 @@ default_a2c_config = {
     },
 
     'critic_layers_initialization': lambda x: init_weights(x,
-                                                           function_output=lambda x: default_actor_critic(x, gain=1.00)),
+                                                           function_output=lambda x: default_actor_critic(x,
+                                                                                                          gain=1.00)),
     'actor_layers_initialization': lambda x: init_weights(x,
-                                                           function_output=lambda x: default_actor_critic(x, gain=0.01)),
+                                                          function_output=lambda x: default_actor_critic(x, gain=0.01)),
 
     #
     # ADVANCED CONFIG (don't touch if you don't know what you're doing)
@@ -111,4 +113,3 @@ default_a2c_config = {
     # Or try to see if it impact badly your perf first
     'cudnn_trade_perf_for_reproducibility': False,
 }
-

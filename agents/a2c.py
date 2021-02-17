@@ -9,6 +9,7 @@ from agents.abstract_agent import AbstractAgent
 from configs.a2c_default import default_a2c_config
 from utils.Memory import Memory
 from utils.Diverse import init_and_seed, MockLRScheduler, parse_scheduler
+from utils.ParameterScheduler import ConstantScheduler, ParameterScheduler
 from utils.vec_env.util import create_subproc_env
 
 
@@ -20,6 +21,7 @@ class A2C(AbstractAgent):
                    entity=config['WandB_entity'], group=config['WandB_group'], job_type=config['WandB_job_type'],
                    tags=config['WandB_tags'], notes=config['WandB_notes'])
         init_and_seed(config)
+        self.scheduler_parameters = []
         self.config = config
         self.envs, self.env_info = create_subproc_env(config['env_id'], config['env_config'], config['seed'], config['num_worker'],
                                                       config['shared_memory'], config['env_copy'], False)
@@ -29,17 +31,23 @@ class A2C(AbstractAgent):
         self.num_steps = config['num_steps']
         self.gamma = parse_scheduler(config['gamma'])
         self.lambda_gae = parse_scheduler(config['lambda_gae'])
+        self.scheduler_parameters.append(self.gamma)
+        self.scheduler_parameters.append(self.lambda_gae)
         self.statistics = config['statistics'](self.config)
         self.state_dim = self.env_info.observation_space.shape[0]
         self.action_dim = self.env_info.action_space.n
-        self.lr = config['lr_initial']
+        self.lr = parse_scheduler(config['lr'])
         self.policy_coeff = parse_scheduler(config['policy_coeff'])
         self.vf_coeff = parse_scheduler(config['vf_coeff'])
         self.entropy_coeff = parse_scheduler(config['entropy_coeff'])
+        self.scheduler_parameters.append(self.policy_coeff)
+        self.scheduler_parameters.append(self.vf_coeff)
+        self.scheduler_parameters.append(self.entropy_coeff)
 
         self.distribution = config['distribution']
 
         self.clip_grad_norm = parse_scheduler(self.config['clip_grad_norm'])
+        self.scheduler_parameters.append(self.clip_grad_norm)
 
         self.states = self.envs.reset()
         self.states_tensor = torch.from_numpy(self.states).to(self.inference_device, non_blocking=True)
@@ -58,10 +66,6 @@ class A2C(AbstractAgent):
             self.training_model = self.inference_model
         wandb.watch(self.training_model, log_freq=self.config['WandB_model_log_frequency'])
         self.optimizer = config['optimizer'](self.training_model.parameters(), lr=config['lr_initial'])
-        if config['lr_scheduler'] is not None:
-            self.scheduler = config['lr_scheduler'](self.optimizer)
-        else:
-            self.scheduler = MockLRScheduler(config['lr_initial'])
 
     def act(self):
         wandb.log(self.statistics.start_act(), step=self.statistics.get_iteration())
@@ -100,6 +104,7 @@ class A2C(AbstractAgent):
                 if done:
                     wandb.log(self.statistics.episode_done(worker_id), step=self.statistics.get_iteration())
             wandb.log(self.statistics.end_step(), step=self.statistics.get_iteration())
+        self.increment_scheduler(self.statistics.get_episodes_this_iter(), criteria='episode')
         wandb.log(self.statistics.end_act(), step=self.statistics.get_iteration())
 
     def update(self):
@@ -129,14 +134,13 @@ class A2C(AbstractAgent):
                    'Algorithm/actor_loss': actor_loss,
                    'Algorithm/critic_loss': critic_loss,
                    'Statistics/entropy': self.memory.entropy,
-                   'Algorithm/LR': self.scheduler.get_last_lr()[-1]},
+                   'Algorithm/LR': self.lr.get_current_value()},
                   step=self.statistics.get_iteration_nb())
 
         loss.backward()
         if self.clip_grad_norm is not None:
             torch.nn.utils.clip_grad_norm_(self.training_model.parameters(), self.clip_grad_norm.get_current_value())
         self.optimizer.step()
-        self.scheduler.step()
         self.states_tensor = self.states_tensor.to(self.inference_device, non_blocking=True)
         self.inference_model.load_state_dict(self.training_model.state_dict())
         wandb.log(self.statistics.end_update(), step=self.statistics.get_iteration_nb())
@@ -170,6 +174,7 @@ class A2C(AbstractAgent):
         wandb.log(self.statistics.start_train(), step=self.statistics.get_iteration())
         self.act()
         self.update()
+        self.increment_scheduler(1, criteria='train_iter')
         wandb.log(self.statistics.end_train(),
                   step=self.statistics.get_iteration_nb())
 
@@ -217,7 +222,15 @@ class A2C(AbstractAgent):
                    'inference_model': self.inference_model.state_dict(),
                    'training_model': self.training_model.state_dict(),
                    'optimizer': self.optimizer.state_dict(),
-                   'scheduler': self.scheduler.state_dict(),
+                   'num_worker': self.num_worker,
+                   'num_steps': self.num_steps,
+                   'lr': self.lr,
+                   'policy_coeff': self.policy_coeff,
+                   'vf_coeff': self.vf_coeff,
+                   'gamma': self.gamma,
+                   'lambda_gae': self.lambda_gae,
+                   'entropy_coeff': self.entropy_coeff,
+                   'clip_grad_norm': self.clip_grad_norm,
                    'memory': self.memory,
                    'distribution': self.distribution,
                    'WandB_id': wandb.util.generate_id(),
@@ -237,5 +250,27 @@ class A2C(AbstractAgent):
             new_class.inference_model.load_state_dict(saved_data['inference_model'])
             new_class.training_model.load_state_dict(saved_data['training_model'])
             new_class.optimizer.load_state_dict(saved_data['optimizer'])
-            new_class.scheduler.load_state_dict(saved_data['scheduler'])
+            new_class.num_worker = saved_data['num_worker']
+            new_class.num_steps = saved_data['num_steps']
+            new_class.lr = saved_data['lr']
+            new_class.policy_coeff = saved_data['policy_coeff']
+            new_class.vf_coeff = saved_data['vf_coeff']
+            new_class.gamma = saved_data['gamma']
+            new_class.lambda_gae = saved_data['lambda_gae']
+            new_class.entropy_coeff = saved_data['entropy_coeff']
+            new_class.clip_grad_norm = saved_data['clip_grad_norm']
             return new_class
+
+    def increment_scheduler(self, steps, criteria='episode'):
+        for scheduler in self.scheduler_parameters:
+            if scheduler.criteria == criteria:
+                scheduler.inc_step(steps)
+        if isinstance(self.lr, ParameterScheduler) and not isinstance(self.lr, ConstantScheduler):
+            if self.lr.criteria == criteria:
+                self.lr.inc_step(steps)
+                for group in self.optimizer.param_groups:
+                    group['lr'] = self.lr.get_current_value()
+
+
+
+

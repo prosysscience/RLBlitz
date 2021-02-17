@@ -25,6 +25,9 @@ class Statistics:
     def get_iteration_nb(self):
         return self.iteration
 
+    def get_episodes_this_iter(self):
+        return self.episode_this_iter
+
     def add_rewards(self, rewards):
         self.episode_return += rewards
         self.episode_len += 1

@@ -4,12 +4,13 @@ from abc import ABC, abstractmethod
 
 class ParameterScheduler(ABC):
 
-    def __init__(self, start_val, end_val, start_step, end_step):
+    def __init__(self, start_val, end_val, start_step, end_step, criteria='episode'):
         self.start_val = start_val
         self.end_val = end_val
         self.start_step = start_step
         self.end_step = end_step
         self.step = 0
+        self.criteria = criteria
 
     def inc_step(self, nb_step=1):
         self.step += nb_step
@@ -32,16 +33,16 @@ class ParameterScheduler(ABC):
 
 class ConstantScheduler(ParameterScheduler):
 
-    def __init__(self, start_val, end_val=None, start_step=None, end_step=None):
-        super().__init__(start_val, end_val, start_step, end_step)
+    def __init__(self, start_val, end_val=None, start_step=None, end_step=None, criteria='episode'):
+        super().__init__(start_val, end_val, start_step, end_step, criteria)
 
     def get_current_value(self):
         return self.start_val
 
 class LinearDecayScheduler(ParameterScheduler):
 
-    def __init__(self, start_val, end_val, start_step, end_step):
-        super().__init__(start_val, end_val, start_step, end_step)
+    def __init__(self, start_val, end_val, start_step, end_step, criteria='episode'):
+        super().__init__(start_val, end_val, start_step, end_step, criteria)
         self.slope = (end_val - start_val) / (end_step - start_step)
 
     def get_current_value(self):
@@ -53,8 +54,8 @@ class LinearDecayScheduler(ParameterScheduler):
 
 class RateDecayScheduler(ParameterScheduler):
 
-    def __init__(self, start_val, end_val, start_step, end_step, decay_rate=0.9, frequency=20.):
-        super().__init__(start_val, end_val, start_step, end_step)
+    def __init__(self, start_val, end_val, start_step, end_step, decay_rate=0.9, frequency=20., criteria='episode'):
+        super().__init__(start_val, end_val, start_step, end_step, criteria)
         self.decay_rate = decay_rate
         self.frequency = frequency
 
@@ -69,8 +70,8 @@ class RateDecayScheduler(ParameterScheduler):
 
 class PeriodicDecayScheduler(ParameterScheduler):
 
-    def __init__(self, start_val, end_val, start_step, end_step, frequency=60.):
-        super().__init__(start_val, end_val, start_step, end_step)
+    def __init__(self, start_val, end_val, start_step, end_step, frequency=60., criteria='episode'):
+        super().__init__(start_val, end_val, start_step, end_step, criteria)
         self.frequency = frequency
 
     def get_current_value(self):
