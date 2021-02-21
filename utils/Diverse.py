@@ -66,6 +66,8 @@ def set_attr(obj, attr_dict):
 
 
 def parse_scheduler(spec):
+    if spec is None:
+        return None
     if not isinstance(spec, dict):
         return ConstantScheduler(spec)
     scheduler = getattr(ParameterScheduler, spec['scheduler_name'])

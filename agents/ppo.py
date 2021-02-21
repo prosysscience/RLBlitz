@@ -61,8 +61,8 @@ class PPO(A2C):
     def update(self):
         wandb.log(self.statistics.start_update(), step=self.statistics.get_iteration())
         self.memory.rewards = torch.clamp(self.memory.rewards, self.config['min_reward'], self.config['max_reward'])
-        computed_return = self._compute_return(self.config['use_gae'])
         with torch.no_grad():
+            computed_return = self._compute_return(self.config['use_gae'])
             values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
             if self.config['use_gae']:
                 advantage = computed_return - values[:-1]
@@ -89,9 +89,7 @@ class PPO(A2C):
                 new_probabilities, new_values = self.training_model(self.memory.states[indices, :])
                 new_values = new_values.view(new_values.shape[0], new_values.shape[1])
                 if self.vf_clipping_param is not None:
-                    new_values = values[indices, :] + \
-                                 torch.clamp(new_values - values[indices, :],
-                                             -self.vf_clipping_param.get_current_value(), self.vf_clipping_param.get_current_value())
+                    new_values = values[indices, :] + torch.clamp(new_values - values[indices, :], -self.vf_clipping_param.get_current_value(), self.vf_clipping_param.get_current_value())
                 dist = self.distribution(new_probabilities)
                 new_probabilities = dist.log_prob(self.memory.actions[indices, :])
                 entropy = dist.entropy().mean()
@@ -113,8 +111,17 @@ class PPO(A2C):
                     mini_batch_kl = torch.mean(self.memory.logprobs[indices, :] - new_probabilities).cpu()
                     accumulated_epoch_kl_div += mini_batch_kl
                 nb_mini_batches_done += 1
-                wandb.log({'Algorithm/total_loss': loss, 'Algorithm/actor_loss': actor_loss,
-                           'Algorithm/critic_loss': critic_loss},
+                wandb.log({'Algorithm/total_loss': loss,
+                           'Algorithm/actor_loss': actor_loss,
+                           'Algorithm/critic_loss': critic_loss,
+                           'Statistics/entropy': self.memory.entropy,
+                           'Algorithm/gamma': self.gamma.get_current_value(),
+                           'Algorithm/lambda_gae': self.lambda_gae.get_current_value(),
+                           'Algorithm/policy_coeff': self.policy_coeff.get_current_value(),
+                           'Algorithm/vf_coeff': self.vf_coeff.get_current_value(),
+                           'Algorithm/entropy_coeff': self.entropy_coeff.get_current_value(),
+                           'Algorithm/grad_clip_norm': self.clip_grad_norm.get_current_value(),
+                           'Algorithm/lr': self.lr.get_current_value()},
                           step=self.statistics.get_iteration_nb())
             number_epoch_done += 1
             accumulated_kl_div += (accumulated_epoch_kl_div / nb_mini_batches_done)

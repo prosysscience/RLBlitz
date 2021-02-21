@@ -15,21 +15,16 @@ default_ppo_config = {
     #
 
     # ENV CONFIG
-    'env_id': 'LunarLander-v2',
+    'env_id': 'CartPole-v0',
     'env_config': {},
-    'num_steps': 64,
+    'num_steps': 128,
     'gamma': 0.99,
     'seed': 0,
     'num_worker': multiprocessing.cpu_count(),
 
     # NN CONFIG
     'optimizer': optim.Adam,  # if you need more control, you can define a lambda
-    'lr_initial': 5e-5,
-    # None means constant
-    # if you want to use Pytorch scheduler, you can! It's even recommended
-    # Example: 'lr_scheduler': lambda x: torch.optim.lr_scheduler.LambdaLR(x, lr_lambda=lambda epoch: 0.999**epoch),
-    # x represent the optimizer, keep this structure
-    'lr_scheduler': None,
+    'lr': 5e-5,
     'clip_grad_norm': 0.5,
     # devices
     'training_device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
@@ -39,7 +34,6 @@ default_ppo_config = {
     # STATISTICS CONFIG
     # for more control about how to handle the stats, modify this
     'statistics': Statistics,
-    'parameter_scheduler_criteria': 'episode',  # can also use 'timestep' or 'train_iter'
     # WandB init configs: https://docs.wandb.ai/ref/init
     'WandB_project': None,
     'WandB_entity': None,
@@ -55,12 +49,12 @@ default_ppo_config = {
     'distribution': Categorical,
     # Lamdba-GAE: https://arxiv.org/abs/1506.02438
     'use_gae': True,
-    'lambda_gae': 0.98,
+    'lambda_gae': 0.95,
     # only valuable with large batches
     'normalize_advantage': True,
     'policy_coeff': 1.0,
     'vf_coeff': 1.0,
-    'entropy_coeff': 1e-4,
+    'entropy_coeff': 0.001,
     # neural network
     # define the template needs to inherit from AbstractActorCritic
     # can be change if you need very specific behavior
@@ -88,14 +82,15 @@ default_ppo_config = {
             nn.Softmax(dim=1)
         ),
     },
+
     'critic_layers_initialization': lambda x: init_weights(x, function_output=lambda layer: default_actor_critic(layer, gain=1.00)),
     'actor_layers_initialization': lambda x: init_weights(x, function_output=lambda layer: default_actor_critic(layer, gain=0.01)),
 
     # PPO Specific config
     'ppo_epochs': 10,
     'policy_clipping_param': 0.2,
-    'vf_clipping_param': 10.0,
-    'mini_batch_size': 64,
+    'vf_clipping_param': None,
+    'mini_batch_size': 256,
     'min_reward': -10,
     'max_reward': 10,
     'target_kl_div': 0.03,

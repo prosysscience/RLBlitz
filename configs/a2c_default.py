@@ -24,12 +24,7 @@ default_a2c_config = {
     # NN CONFIG
     #
     'optimizer': optim.Adam,  # if you need more control, you can define a lambda
-    'lr_initial': 1e-4,
-    # None means constant
-    # if you want to use Pytorch scheduler, you can! It's even recommended
-    # Example: 'lr_scheduler': lambda x: torch.optim.lr_scheduler.LambdaLR(x, lr_lambda=lambda epoch: 0.999**epoch),
-    # x represent the optimizer, keep this structure
-    'lr_scheduler': None,
+    'lr': 1e-4,
     'clip_grad_norm': 0.5,
     # devices
     'training_device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
@@ -41,7 +36,6 @@ default_a2c_config = {
     #
     # for more control about how to handle the stats, modify this
     'statistics': Statistics,
-    'parameter_scheduler_criteria': 'episode',  # can also use 'timestep' or 'train_iter'
     # WandB init configs: https://docs.wandb.ai/ref/init
     'WandB_project': None,
     'WandB_entity': None,

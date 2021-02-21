@@ -8,7 +8,7 @@ import torch
 from agents.abstract_agent import AbstractAgent
 from configs.a2c_default import default_a2c_config
 from utils.Memory import Memory
-from utils.Diverse import init_and_seed, MockLRScheduler, parse_scheduler
+from utils.Diverse import init_and_seed, parse_scheduler
 from utils.ParameterScheduler import ConstantScheduler, ParameterScheduler
 from utils.vec_env.util import create_subproc_env
 
@@ -56,6 +56,7 @@ class A2C(AbstractAgent):
         self.inference_model = neural_network_architecture(self.state_dim, self.action_dim, **config['nn_kwargs'])
         if self.config['critic_layers_initialization'] is not None:
             self.config['critic_layers_initialization'](self.inference_model.get_critic())
+        if self.config['actor_layers_initialization'] is not None:
             self.config['actor_layers_initialization'](self.inference_model.get_actor())
         self.inference_model.to(self.inference_device, non_blocking=True)
         if self.training_device != self.inference_device:
@@ -65,7 +66,7 @@ class A2C(AbstractAgent):
         else:
             self.training_model = self.inference_model
         wandb.watch(self.training_model, log_freq=self.config['WandB_model_log_frequency'])
-        self.optimizer = config['optimizer'](self.training_model.parameters(), lr=config['lr_initial'])
+        self.optimizer = config['optimizer'](self.training_model.parameters(), lr=self.lr.get_current_value())
 
     def act(self):
         wandb.log(self.statistics.start_act(), step=self.statistics.get_iteration())
@@ -129,13 +130,19 @@ class A2C(AbstractAgent):
         # we average entropy over numb of steps
         self.memory.entropy /= self.num_steps
 
-        loss = self.policy_coeff.get_current_value() * actor_loss + self.vf_coeff.get_current_value() * critic_loss - self.entropy_coeff.get_current_value() * self.memory.entropy
+        loss = self.policy_coeff.get_current_value() * actor_loss + self.vf_coeff.get_current_value() * critic_loss - self.entropy_coeff.compute_new_value() * self.memory.entropy
 
         wandb.log({'Algorithm/total_loss': loss,
                    'Algorithm/actor_loss': actor_loss,
                    'Algorithm/critic_loss': critic_loss,
                    'Statistics/entropy': self.memory.entropy,
-                   'Algorithm/LR': self.lr.get_current_value()},
+                   'Algorithm/gamma': self.gamma.get_current_value(),
+                   'Algorithm/lambda_gae': self.lambda_gae.get_current_value(),
+                   'Algorithm/policy_coeff': self.policy_coeff.get_current_value(),
+                   'Algorithm/vf_coeff': self.vf_coeff.get_current_value(),
+                   'Algorithm/entropy_coeff': self.entropy_coeff.get_current_value(),
+                   'Algorithm/grad_clip_norm': self.clip_grad_norm.get_current_value(),
+                   'Algorithm/lr': self.lr.get_current_value()},
                   step=self.statistics.get_iteration_nb())
 
         loss.backward()
@@ -151,24 +158,21 @@ class A2C(AbstractAgent):
             self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
             returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float,
                                   device=self.training_device)
-            not_terminal = torch.logical_not(self.memory.is_terminals)
+            not_terminals = torch.logical_not(self.memory.is_terminals)
             if use_gae:
                 self.memory.values[self.num_steps] = self.training_model.critic_only(self.states_tensor)
                 values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
                 gae = 0
-                index = len(self.memory) - 1
-                for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
-                    delta = reward + ((non_terminal * self.gamma.get_current_value() * values[index + 1]) - values[index])
-                    gae = delta + self.gamma .get_current_value() * self.lambda_gae.get_current_value() * non_terminal * gae
+                for index in reversed(range(len(self.memory))):
+                    delta = self.memory.rewards[index] + (not_terminals[index] * self.gamma.get_current_value() * values[index + 1]) - values[index]
+                    gae = delta + self.gamma.get_current_value() * self.lambda_gae.get_current_value() * not_terminals[index] * gae
                     returns[index] = gae
-                    index -= 1
+                returns += values[:-1]
             else:
                 return_value = self.training_model.critic_only(self.states_tensor).view(-1)
-                index = len(self.memory) - 1
-                for reward, non_terminal in zip(reversed(self.memory.rewards), reversed(not_terminal)):
-                    return_value = reward + (non_terminal * self.gamma .get_current_value() * return_value)
+                for index in reversed(range(len(self.memory))):
+                    return_value = self.memory.rewards[index] + (not_terminals[index] * self.gamma.get_current_value() * return_value)
                     returns[index] = return_value
-                    index -= 1
         return returns
 
     def train(self):
@@ -270,8 +274,4 @@ class A2C(AbstractAgent):
             if self.lr.criteria == criteria:
                 self.lr.inc_step(steps)
                 for group in self.optimizer.param_groups:
-                    group['lr'] = self.lr.get_current_value()
-
-
-
-
+                    group['lr'] = self.lr.compute_new_value()
