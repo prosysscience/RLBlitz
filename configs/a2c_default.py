@@ -13,7 +13,7 @@ default_a2c_config = {
     #
     # ENV CONFIG
     #
-    'env_id': 'LunarLander-v2',
+    'env_id': 'CartPole-v0',
     'env_config': {},
     'num_steps': 32,
     'gamma': 0.99,
@@ -87,6 +87,7 @@ default_a2c_config = {
         ),
     },
 
+    'common_layers_initialization': None,
     'critic_layers_initialization': lambda x: init_weights(x,
                                                            function_output=lambda x: default_actor_critic(x,
                                                                                                           gain=1.00)),

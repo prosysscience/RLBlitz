@@ -54,6 +54,8 @@ class A2C(AbstractAgent):
         self.memory = Memory(config, self.state_dim, self.training_device, self.config['use_gae'])
         neural_network_architecture = self.config['nn_template']
         self.inference_model = neural_network_architecture(self.state_dim, self.action_dim, **config['nn_kwargs'])
+        if self.config['common_layers_initialization'] is not None:
+            self.config['common_layers_initialization'](self.inference_model.get_common())
         if self.config['critic_layers_initialization'] is not None:
             self.config['critic_layers_initialization'](self.inference_model.get_critic())
         if self.config['actor_layers_initialization'] is not None:
@@ -67,6 +69,8 @@ class A2C(AbstractAgent):
             self.training_model = self.inference_model
         wandb.watch(self.training_model, log_freq=self.config['WandB_model_log_frequency'])
         self.optimizer = config['optimizer'](self.training_model.parameters(), lr=self.lr.get_current_value())
+
+        self.loss = torch.nn.MSELoss()
 
     def act(self):
         wandb.log(self.statistics.start_act(), step=self.statistics.get_iteration())
@@ -112,8 +116,8 @@ class A2C(AbstractAgent):
     def update(self):
         wandb.log(self.statistics.start_update(), step=self.statistics.get_iteration())
         self.optimizer.zero_grad(set_to_none=True)
-
-        computed_return = self._compute_return(self.config['use_gae'])
+        with torch.no_grad():
+            computed_return, _ = self._compute_return(self.config['use_gae'])
         values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
         if self.config['use_gae']:
             advantage = computed_return - values[:-1]
@@ -154,26 +158,28 @@ class A2C(AbstractAgent):
         wandb.log(self.statistics.end_update(), step=self.statistics.get_iteration_nb())
 
     def _compute_return(self, use_gae=True):
-        with torch.no_grad():
-            self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
-            returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float,
-                                  device=self.training_device)
-            not_terminals = torch.logical_not(self.memory.is_terminals)
-            if use_gae:
-                self.memory.values[self.num_steps] = self.training_model.critic_only(self.states_tensor)
-                values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
-                gae = 0
-                for index in reversed(range(len(self.memory))):
-                    delta = self.memory.rewards[index] + (not_terminals[index] * self.gamma.get_current_value() * values[index + 1]) - values[index]
-                    gae = delta + self.gamma.get_current_value() * self.lambda_gae.get_current_value() * not_terminals[index] * gae
-                    returns[index] = gae
-                returns += values[:-1]
-            else:
-                return_value = self.training_model.critic_only(self.states_tensor).view(-1)
-                for index in reversed(range(len(self.memory))):
-                    return_value = self.memory.rewards[index] + (not_terminals[index] * self.gamma.get_current_value() * return_value)
-                    returns[index] = return_value
-        return returns
+        self.states_tensor = self.states_tensor.to(self.training_device, non_blocking=True)
+        returns = torch.empty((len(self.memory), self.num_worker), dtype=torch.float,
+                              device=self.training_device)
+        not_terminals = torch.logical_not(self.memory.is_terminals)
+        if use_gae:
+            self.memory.values[self.num_steps] = self.training_model.critic_only(self.states_tensor)
+            values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
+            gae = 0
+            for index in reversed(range(len(self.memory))):
+                delta = self.memory.rewards[index] + (
+                            not_terminals[index] * self.gamma.get_current_value() * values[index + 1]) - values[index]
+                gae = delta + self.gamma.get_current_value() * self.lambda_gae.get_current_value() * not_terminals[
+                    index] * gae
+                returns[index] = gae
+            return returns + values[:-1], returns
+        else:
+            return_value = self.training_model.critic_only(self.states_tensor).view(-1)
+            for index in reversed(range(len(self.memory))):
+                return_value = self.memory.rewards[index] + (
+                            not_terminals[index] * self.gamma.get_current_value() * return_value)
+                returns[index] = return_value
+            return returns, None
 
     def train(self):
         wandb.log(self.statistics.start_train(), step=self.statistics.get_iteration())

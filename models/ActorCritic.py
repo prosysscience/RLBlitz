@@ -29,6 +29,10 @@ class AbstractActorCritic(nn.Module, ABC):
     def get_critic(self):
         pass
 
+    @abstractmethod
+    def get_common(self):
+        pass
+
 
 class ActorCritic(AbstractActorCritic):
     def __init__(self, state_dim, action_dim, common_layers, actor_layers, critic_layers):
@@ -55,3 +59,6 @@ class ActorCritic(AbstractActorCritic):
 
     def get_critic(self):
         return self.value_network
+
+    def get_common(self):
+        return self.common_network

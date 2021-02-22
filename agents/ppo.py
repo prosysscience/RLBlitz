@@ -62,12 +62,8 @@ class PPO(A2C):
         wandb.log(self.statistics.start_update(), step=self.statistics.get_iteration())
         self.memory.rewards = torch.clamp(self.memory.rewards, self.config['min_reward'], self.config['max_reward'])
         with torch.no_grad():
-            computed_return = self._compute_return(self.config['use_gae'])
+            computed_return, advantage = self._compute_return(self.config['use_gae'])
             values = self.memory.values.view(self.memory.values.shape[0], self.memory.values.shape[1])
-            if self.config['use_gae']:
-                advantage = computed_return - values[:-1]
-            else:
-                advantage = computed_return - values
         accumulated_kl_div = 0
         number_epoch_done = 0
         total_entropy = 0
@@ -100,7 +96,7 @@ class PPO(A2C):
                 surr2 = torch.clamp(ratio, 1.0 - self.policy_clipping_param.get_current_value(), 1.0 + self.policy_clipping_param.get_current_value()) * mini_batch_advantage
 
                 actor_loss = -torch.min(surr1, surr2).mean()
-                critic_loss = (computed_return[indices, :] - new_values).pow(2).mean()
+                critic_loss = self.loss(new_values, computed_return[indices, :])
 
                 loss = self.policy_coeff.get_current_value() * actor_loss + self.vf_coeff.get_current_value() * critic_loss - self.entropy_coeff.get_current_value() * entropy
                 loss.backward()
@@ -108,7 +104,7 @@ class PPO(A2C):
                     torch.nn.utils.clip_grad_norm_(self.training_model.parameters(), self.clip_grad_norm.get_current_value())
                 self.optimizer.step()
                 with torch.no_grad():
-                    mini_batch_kl = torch.mean(self.memory.logprobs[indices, :] - new_probabilities).cpu()
+                    mini_batch_kl = torch.mean(torch.abs_(self.memory.logprobs[indices, :] - new_probabilities)).cpu()
                     accumulated_epoch_kl_div += mini_batch_kl
                 nb_mini_batches_done += 1
                 wandb.log({'Algorithm/total_loss': loss,

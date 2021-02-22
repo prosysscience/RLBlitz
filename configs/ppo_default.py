@@ -66,33 +66,34 @@ default_ppo_config = {
 
         # keep the lambda, it's important !
         'critic_layers': lambda input_size: nn.Sequential(
-            nn.Linear(input_size, 256),
+            nn.Linear(input_size, 128),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(128, 128),
             nn.ReLU(),
-            nn.Linear(256, 1),
+            nn.Linear(128, 1),
         ),
         # keep the lambda, it's important !
         'actor_layers': lambda input_size, output_size: nn.Sequential(
-            nn.Linear(input_size, 256),
+            nn.Linear(input_size, 128),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(128, 128),
             nn.ReLU(),
-            nn.Linear(256, output_size),
+            nn.Linear(128, output_size),
             nn.Softmax(dim=1)
         ),
     },
 
+    'common_layers_initialization': None,
     'critic_layers_initialization': lambda x: init_weights(x, function_output=lambda layer: default_actor_critic(layer, gain=1.00)),
     'actor_layers_initialization': lambda x: init_weights(x, function_output=lambda layer: default_actor_critic(layer, gain=0.01)),
 
     # PPO Specific config
     'ppo_epochs': 10,
-    'policy_clipping_param': 0.2,
+    'policy_clipping_param': 0.1,
     'vf_clipping_param': None,
     'mini_batch_size': 256,
-    'min_reward': -10,
-    'max_reward': 10,
+    'min_reward': -20,
+    'max_reward': 20,
     'target_kl_div': 0.03,
 
     # ADVANCED CONFIG (don't touch if you don't know what you're doing)
