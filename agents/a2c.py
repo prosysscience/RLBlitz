@@ -70,8 +70,6 @@ class A2C(AbstractAgent):
         wandb.watch(self.training_model, log_freq=self.config['WandB_model_log_frequency'])
         self.optimizer = config['optimizer'](self.training_model.parameters(), lr=self.lr.get_current_value())
 
-        self.loss = torch.nn.MSELoss()
-
     def act(self):
         wandb.log(self.statistics.start_act(), step=self.statistics.get_iteration())
         self.memory.clear()

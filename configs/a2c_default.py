@@ -15,7 +15,7 @@ default_a2c_config = {
     #
     'env_id': 'CartPole-v0',
     'env_config': {},
-    'num_steps': 32,
+    'num_steps': 128,
     'gamma': 0.99,
     'seed': 0,
     'num_worker': multiprocessing.cpu_count(),
@@ -24,7 +24,7 @@ default_a2c_config = {
     # NN CONFIG
     #
     'optimizer': optim.Adam,  # if you need more control, you can define a lambda
-    'lr': 1e-4,
+    'lr': 5e-4,
     'clip_grad_norm': 0.5,
     # devices
     'training_device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
@@ -70,19 +70,19 @@ default_a2c_config = {
 
         # keep the lambda, it's important !
         'critic_layers': lambda input_size: nn.Sequential(
-            nn.Linear(input_size, 256),
+            nn.Linear(input_size, 128),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(128, 128),
             nn.ReLU(),
-            nn.Linear(256, 1),
+            nn.Linear(128, 1),
         ),
         # keep the lambda, it's important !
         'actor_layers': lambda input_size, output_size: nn.Sequential(
-            nn.Linear(input_size, 256),
+            nn.Linear(input_size, 128),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(128, 128),
             nn.ReLU(),
-            nn.Linear(256, output_size),
+            nn.Linear(128, output_size),
             nn.Softmax(dim=1)
         ),
     },

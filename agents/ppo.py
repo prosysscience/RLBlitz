@@ -96,7 +96,7 @@ class PPO(A2C):
                 surr2 = torch.clamp(ratio, 1.0 - self.policy_clipping_param.get_current_value(), 1.0 + self.policy_clipping_param.get_current_value()) * mini_batch_advantage
 
                 actor_loss = -torch.min(surr1, surr2).mean()
-                critic_loss = self.loss(new_values, computed_return[indices, :])
+                critic_loss = (computed_return[indices, :] - new_values).pow(2).mean()
 
                 loss = self.policy_coeff.get_current_value() * actor_loss + self.vf_coeff.get_current_value() * critic_loss - self.entropy_coeff.get_current_value() * entropy
                 loss.backward()
